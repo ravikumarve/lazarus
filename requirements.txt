@@ -25,6 +25,10 @@ python-telegram-bot==20.7
 # Configuration
 python-dotenv==1.0.0
 
+# Web Dashboard
+fastapi==0.109.0
+uvicorn==0.27.0
+
 # Testing
 pytest==7.4.3
 pytest-cov==4.1.0
