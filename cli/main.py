@@ -23,6 +23,7 @@ from pathlib import Path
 import click
 from rich.console import Console
 from rich.table import Table
+from rich.panel import Panel
 
 from core.config import (
     LAZARUS_DIR,
@@ -185,45 +186,112 @@ def ping():
 @cli.command()
 def status():
     """Show vault status with rich dashboard."""
+    import os
+    from datetime import datetime, timedelta, UTC
+
     try:
         config = load_config()
         since = days_since_checkin(config)
         remaining = days_remaining(config)
         vault_size = get_vault_size(config)
 
-        if remaining > 10:
-            status_color = "green"
-        elif remaining > 3:
-            status_color = "yellow"
-        elif remaining > 0:
-            status_color = "bold red"
-        else:
-            status_color = "red"
+        PID_FILE = LAZARUS_DIR / "agent.pid"
+        agent_running = False
+        if PID_FILE.exists():
+            try:
+                pid = int(PID_FILE.read_text().strip())
+                if os.path.exists(f"/proc/{pid}"):
+                    agent_running = True
+            except (ValueError, IOError):
+                pass
 
-        table = Table(title="Lazarus Protocol — Status Dashboard", show_header=True, header_style="bold cyan")
-        table.add_column("Field", style="bold")
-        table.add_column("Value", style="white")
+        since_color = "green" if since < 10 else "yellow" if since < 20 else "red"
+        remaining_color = "green" if remaining > 10 else "yellow" if remaining >= 3 else "red"
+        armed_color = "green" if config.armed else "red"
+        agent_color = "green" if agent_running else "red"
 
-        table.add_row("Status", f"[{status_color}]{'ARMED' if config.armed else 'DISARMED'}[/{status_color}]")
-        table.add_row("Owner", config.owner_name)
-        table.add_row("Owner Email", config.owner_email)
-        table.add_row("Check-in Interval", f"{config.checkin_interval_days} days")
-        table.add_row("Days Since Ping", f"{since:.1f} days")
-        table.add_row("Days Until Trigger", f"[{status_color}]{remaining:.1f} days[/{status_color}]")
-        table.add_row("Beneficiary Count", str(len(config.vault.beneficiaries)))
-        table.add_row("Vault Size", _format_size(vault_size))
-        table.add_row("Encrypted File", config.vault.encrypted_file_path)
-        if config.vault.ipfs_cid:
-            table.add_row("IPFS CID", config.vault.ipfs_cid[:20] + "...")
+        last_ping = "Never"
+        if config.last_checkin_timestamp:
+            ping_dt = datetime.fromtimestamp(config.last_checkin_timestamp, tz=UTC)
+            last_ping = ping_dt.strftime("%Y-%m-%d %H:%M UTC")
 
-        console.print(table)
+        next_trigger = "N/A"
+        if remaining > 0:
+            trigger_dt = datetime.now(UTC) + timedelta(days=remaining)
+            next_trigger = trigger_dt.strftime("%Y-%m-%d")
 
-        console.print("\n[bold cyan]Beneficiaries:[/bold cyan]")
-        for b in config.vault.beneficiaries:
-            console.print(f"  - {b.beneficiary_name}")
+        main_table = Table(show_header=False, box=None, padding=(0, 2))
+        main_table.add_column(style="bold", width=20)
+        main_table.add_column(width=40)
+
+        main_table.add_row(
+            "[bold]⚰️ Status[/bold]",
+            f"[{armed_color}]{'🟢 ARMED' if config.armed else '🔴 DISARMED'}[/{armed_color}]"
+        )
+        main_table.add_row(
+            "[bold]⏰ Agent[/bold]",
+            f"[{agent_color}]{'● RUNNING' if agent_running else '○ STOPPED'}[/{agent_color}]"
+        )
+
+        details_table = Table(show_header=False, box=None, padding=(0, 2))
+        details_table.add_column(style="dim", width=22)
+        details_table.add_column(width=35)
+
+        details_table.add_row("[dim]Owner[/dim]", config.owner_name)
+        details_table.add_row("[dim]Email[/dim]", config.owner_email)
+        details_table.add_row("[dim]Check-in Interval[/dim]", f"{config.checkin_interval_days} days")
+        details_table.add_row(
+            "[dim]Days Since Ping[/dim]",
+            f"[{since_color}]{since:.1f} days[/{since_color}]"
+        )
+        details_table.add_row(
+            "[dim]Days Until Trigger[/dim]",
+            f"[{remaining_color}]{remaining:.1f} days[/{remaining_color}]"
+        )
+        details_table.add_row("[dim]Next Trigger Date[/dim]", f"[yellow]{next_trigger}[/yellow]")
+        details_table.add_row("[dim]Last Ping[/dim]", f"[dim]{last_ping}[/dim]")
+
+        vault_table = Table(show_header=False, box=None, padding=(0, 2))
+        vault_table.add_column(style="dim", width=22)
+        vault_table.add_column(width=35)
+
+        vault_table.add_row("[dim]Beneficiaries[/dim]", str(len(config.vault.beneficiaries)))
+        vault_table.add_row("[dim]Vault Size[/dim]", _format_size(vault_size))
+        vault_table.add_row("[dim]Encrypted File[/dim]", Path(config.vault.encrypted_file_path).name)
+
+        console.print()
+        console.print(Panel(
+            main_table,
+            title="[bold]⚰️ Lazarus Protocol[/bold]",
+            border_style="cyan",
+            padding=(1, 2),
+        ))
+        console.print()
+
+        console.print(Panel(
+            details_table,
+            title="[bold cyan]📊 Details[/bold cyan]",
+            border_style="cyan",
+            padding=(1, 2),
+        ))
+        console.print()
+
+        console.print(Panel(
+            vault_table,
+            title="[bold cyan]🔐 Vault[/bold cyan]",
+            border_style="cyan",
+            padding=(1, 2),
+        ))
+        console.print()
+
+        console.print("[bold cyan]👥 Beneficiaries:[/bold cyan]")
+        for i, b in enumerate(config.vault.beneficiaries, 1):
+            console.print(f"  {i}. {b.beneficiary_name}")
+        console.print()
 
     except FileNotFoundError:
-        console.print("[red]Lazarus not initialized. Run: lazarus init[/red]")
+        console.print("\n[bold red]⚠️  Lazarus not initialized[/bold red]")
+        console.print("[dim]Run: python -m lazarus init[/dim]\n")
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
 
