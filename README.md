@@ -204,15 +204,15 @@ No blockchain knowledge required. No MetaMask. No IPFS. Just a Python script and
 ## Roadmap
 
 - [x] Project architecture
-- [ ] Core encryption engine (AES-256 + RSA)
-- [ ] IPFS storage layer
-- [ ] CLI setup wizard
-- [ ] Heartbeat agent with APScheduler
-- [ ] Email delivery system
-- [ ] Telegram alerts
-- [ ] Beneficiary decryption kit
+- [x] Core encryption engine (AES-256 + RSA)
+- [x] IPFS storage layer
+- [x] CLI setup wizard
+- [x] Heartbeat agent with APScheduler
+- [x] Email delivery system
+- [x] Telegram alerts
+- [x] Beneficiary decryption kit
+- [x] Multi-beneficiary support
 - [ ] Desktop GUI (Electron / Tkinter) — Pro tier
-- [ ] Multi-beneficiary support
 - [ ] Legal document storage support
 
 ---

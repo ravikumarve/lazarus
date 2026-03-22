@@ -64,10 +64,98 @@ def _log_event(event_type: str, message: str) -> None:
 
 
 @click.group()
-@click.version_option("0.1.0", prog_name="lazarus")
+@click.version_option("1.0.0", prog_name="lazarus")
 def cli():
-    """Lazarus Protocol — Self-hosted dead man's switch for crypto holders."""
+    """⚰️  Lazarus Protocol — Self-hosted dead man's switch for crypto holders."""
     pass
+
+
+@cli.command()
+def doctor():
+    """Run system diagnostics to verify installation and configuration."""
+    import os
+    import sys
+
+    console.print("\n[bold cyan]⚰️  Lazarus Protocol — System Diagnostic[/bold cyan]\n")
+
+    all_passed = True
+
+    def check(name: str, condition: bool, warn: bool = False):
+        nonlocal all_passed
+        if condition:
+            console.print(f"  [green]✓[/green] [OK] {name}")
+        elif warn:
+            console.print(f"  [yellow]⚠[/yellow] [WARN] {name}")
+            all_passed = False
+        else:
+            console.print(f"  [red]✗[/red] [FAIL] {name}")
+            all_passed = False
+
+    console.print("[bold]Environment:[/bold]")
+    py_version = sys.version_info
+    check(f"Python version >= 3.9 (current: {py_version.major}.{py_version.minor})", py_version >= (3, 9))
+
+    console.print("\n[bold]Dependencies:[/bold]")
+    deps = [
+        ("cryptography", "cryptography"),
+        ("APScheduler", "apscheduler"),
+        ("click", "click"),
+        ("rich", "rich"),
+        ("requests", "requests"),
+        ("sendgrid", "sendgrid"),
+        ("python-telegram-bot", "telegram"),
+    ]
+    for display, import_name in deps:
+        try:
+            __import__(import_name)
+            check(f"{display}", True)
+        except ImportError:
+            check(f"{display}", False)
+
+    console.print("\n[bold]Directories:[/bold]")
+    check(f"~/.lazarus directory exists", LAZARUS_DIR.exists())
+    check(f"~/.lazarus/config.json exists", (LAZARUS_DIR / "config.json").exists())
+
+    console.print("\n[bold]Configuration:[/bold]")
+    try:
+        config = load_config()
+        check("config.json is valid and readable", True)
+        check(f"Vault armed: {config.armed}", config.armed, warn=True)
+        check(f"Beneficiaries configured: {len(config.vault.beneficiaries)}", len(config.vault.beneficiaries) > 0, warn=True)
+        check(f"Encrypted file exists: {config.vault.encrypted_file_path[:30]}...", Path(config.vault.encrypted_file_path).exists(), warn=True)
+    except FileNotFoundError:
+        check("config.json exists", False)
+        check("Lazarus initialized", False)
+    except Exception as e:
+        check(f"config.json valid: {e}", False)
+
+    console.print("\n[bold]Agent Status:[/bold]")
+    PID_FILE = LAZARUS_DIR / "agent.pid"
+    if PID_FILE.exists():
+        try:
+            pid = int(PID_FILE.read_text().strip())
+            if os.path.exists(f"/proc/{pid}"):
+                check(f"Agent running (PID: {pid})", True)
+            else:
+                check(f"Agent PID file exists but process not running", False, warn=True)
+        except (ValueError, IOError):
+            check("Agent PID file readable", False)
+    else:
+        check("Agent running", False, warn=True)
+
+    console.print("\n[bold]Environment Variables:[/bold]")
+    check("SMTP_HOST set", bool(os.getenv("SMTP_HOST")), warn=True)
+    check("SMTP_USER set", bool(os.getenv("SMTP_USER")), warn=True)
+    check("SMTP_PASS set", bool(os.getenv("SMTP_PASS")), warn=True)
+    check("TELEGRAM_BOT_TOKEN set", bool(os.getenv("TELEGRAM_BOT_TOKEN")), warn=True)
+
+    console.print("\n")
+    if all_passed:
+        console.print("[bold green]✓ All checks passed![/bold green]")
+    else:
+        console.print("[yellow]⚠ Some checks failed or require attention.[/yellow]")
+        console.print("[dim]Run 'lazarus init' to set up, or 'lazarus status' for details.[/dim]")
+    console.print()
 
 
 @cli.command()
