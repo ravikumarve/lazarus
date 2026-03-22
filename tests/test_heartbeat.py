@@ -9,6 +9,7 @@ import pytest
 
 from core.config import (
     BeneficiaryConfig,
+    BeneficiaryVault,
     LazarusConfig,
     VaultConfig,
 )
@@ -28,7 +29,12 @@ def make_config(days_since: float, armed: bool = True) -> LazarusConfig:
         vault=VaultConfig(
             secret_file_path="/secrets/seed.txt",
             encrypted_file_path="/vault/encrypted.bin",
-            key_blob="dGVzdGtleWJsb2I=",
+            beneficiaries=[
+                BeneficiaryVault(
+                    beneficiary_name="Test Beneficiary",
+                    key_blob="dGVzdGtleWJsb2I="
+                )
+            ],
             ipfs_cid=None,
         ),
         checkin_interval_days=30,

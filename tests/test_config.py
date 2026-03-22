@@ -10,6 +10,7 @@ import pytest
 
 from core.config import (
     BeneficiaryConfig,
+    BeneficiaryVault,
     LazarusConfig,
     VaultConfig,
     load_config,
@@ -18,7 +19,21 @@ from core.config import (
     days_since_checkin,
     days_remaining,
     ConfigCorruptedError,
+    get_beneficiary_key_blob,
+    add_beneficiary_vault,
 )
+
+
+def make_vault_config():
+    """Create a test VaultConfig with a single beneficiary."""
+    return VaultConfig(
+        secret_file_path="/secrets/seed.txt",
+        encrypted_file_path="/vault/encrypted.bin",
+        beneficiaries=[
+            BeneficiaryVault(beneficiary_name="Bob", key_blob="dGVzdGtleWJsb2I=")
+        ],
+        ipfs_cid=None,
+    )
 
 
 class TestLoadSaveConfig:
@@ -32,12 +47,7 @@ class TestLoadSaveConfig:
                 email="bob@example.com",
                 public_key_path="/path/to/key.pem",
             ),
-            vault=VaultConfig(
-                secret_file_path="/secrets/seed.txt",
-                encrypted_file_path="/vault/encrypted.bin",
-                key_blob="dGVzdGtleWJsb2I=",
-                ipfs_cid=None,
-            ),
+            vault=make_vault_config(),
             checkin_interval_days=30,
             last_checkin_timestamp=None,
             telegram_chat_id=None,
@@ -56,7 +66,9 @@ class TestLoadSaveConfig:
         assert loaded.beneficiary.public_key_path == config.beneficiary.public_key_path
         assert loaded.vault.secret_file_path == config.vault.secret_file_path
         assert loaded.vault.encrypted_file_path == config.vault.encrypted_file_path
-        assert loaded.vault.key_blob == config.vault.key_blob
+        assert len(loaded.vault.beneficiaries) == 1
+        assert loaded.vault.beneficiaries[0].beneficiary_name == "Bob"
+        assert loaded.vault.beneficiaries[0].key_blob == "dGVzdGtleWJsb2I="
         assert loaded.vault.ipfs_cid == config.vault.ipfs_cid
         assert loaded.checkin_interval_days == config.checkin_interval_days
         assert loaded.last_checkin_timestamp == config.last_checkin_timestamp
@@ -81,11 +93,7 @@ class TestCheckinHelpers:
                 email="ben@example.com",
                 public_key_path="/path/key.pem",
             ),
-            vault=VaultConfig(
-                secret_file_path="/s.txt",
-                encrypted_file_path="/e.bin",
-                key_blob="blob",
-            ),
+            vault=make_vault_config(),
             last_checkin_timestamp=None,
         )
 
@@ -107,11 +115,7 @@ class TestCheckinHelpers:
                 email="ben@example.com",
                 public_key_path="/path/key.pem",
             ),
-            vault=VaultConfig(
-                secret_file_path="/s.txt",
-                encrypted_file_path="/e.bin",
-                key_blob="blob",
-            ),
+            vault=make_vault_config(),
             last_checkin_timestamp=now,
         )
 
@@ -130,11 +134,7 @@ class TestCheckinHelpers:
                 email="ben@example.com",
                 public_key_path="/path/key.pem",
             ),
-            vault=VaultConfig(
-                secret_file_path="/s.txt",
-                encrypted_file_path="/e.bin",
-                key_blob="blob",
-            ),
+            vault=make_vault_config(),
             checkin_interval_days=30,
             last_checkin_timestamp=ten_days_ago,
         )
@@ -152,13 +152,61 @@ class TestCheckinHelpers:
                 email="ben@example.com",
                 public_key_path="/path/key.pem",
             ),
-            vault=VaultConfig(
-                secret_file_path="/s.txt",
-                encrypted_file_path="/e.bin",
-                key_blob="blob",
-            ),
+            vault=make_vault_config(),
             last_checkin_timestamp=None,
         )
 
         days = days_since_checkin(config)
         assert math.isinf(days)
+
+
+class TestMultiBeneficiary:
+    def test_get_beneficiary_key_blob(self):
+        """Should return key_blob for existing beneficiary, None otherwise."""
+        config = LazarusConfig(
+            owner_name="Test",
+            owner_email="test@example.com",
+            beneficiary=BeneficiaryConfig(
+                name="Primary",
+                email="primary@example.com",
+                public_key_path="/path/key.pem",
+            ),
+            vault=VaultConfig(
+                secret_file_path="/s.txt",
+                encrypted_file_path="/e.bin",
+                beneficiaries=[
+                    BeneficiaryVault(beneficiary_name="Alice", key_blob="key_alice"),
+                    BeneficiaryVault(beneficiary_name="Bob", key_blob="key_bob"),
+                ],
+            ),
+        )
+
+        assert get_beneficiary_key_blob(config, "Alice") == "key_alice"
+        assert get_beneficiary_key_blob(config, "Bob") == "key_bob"
+        assert get_beneficiary_key_blob(config, "Charlie") is None
+
+    def test_add_beneficiary_vault(self):
+        """Should add a new beneficiary to the vault."""
+        config = LazarusConfig(
+            owner_name="Test",
+            owner_email="test@example.com",
+            beneficiary=BeneficiaryConfig(
+                name="Primary",
+                email="primary@example.com",
+                public_key_path="/path/key.pem",
+            ),
+            vault=VaultConfig(
+                secret_file_path="/s.txt",
+                encrypted_file_path="/e.bin",
+                beneficiaries=[
+                    BeneficiaryVault(beneficiary_name="Alice", key_blob="key_alice"),
+                ],
+            ),
+        )
+
+        updated = add_beneficiary_vault(config, "Bob", "key_bob")
+
+        assert len(updated.vault.beneficiaries) == 2
+        assert updated.vault.beneficiaries[0].beneficiary_name == "Alice"
+        assert updated.vault.beneficiaries[1].beneficiary_name == "Bob"
+        assert updated.vault.beneficiaries[1].key_blob == "key_bob"

@@ -19,7 +19,13 @@ from __future__ import annotations
 import base64
 import os
 from pathlib import Path
-from typing import Union
+from typing import Union, NamedTuple
+
+
+class BeneficiaryKeyBlob(NamedTuple):
+    """A beneficiary's name and their encrypted key blob."""
+    name: str
+    key_blob: str  # base64-encoded RSA-encrypted AES key
 
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa, padding as asym_padding
@@ -218,6 +224,93 @@ def encrypt_file(
     del aes_key_ba
 
     return encrypted_path, key_blob_b64
+
+
+def encrypt_for_multiple_beneficiaries(
+    plaintext_path: Path,
+    beneficiaries: list[tuple[str, bytes]],
+    output_dir: Path,
+) -> tuple[Path, list[BeneficiaryKeyBlob]]:
+    """
+    Encrypt a secret file for multiple beneficiaries.
+
+    Each beneficiary receives their own encrypted copy of the same AES key,
+    encrypted with their RSA public key. All beneficiaries can decrypt the
+    same vault file, but only with their own private key.
+
+    Binary layout of encrypted_secrets.bin:
+        [nonce: 12 bytes][ciphertext + GCM tag: N+16 bytes]
+
+    Args:
+        plaintext_path: Path to the file to encrypt.
+        beneficiaries: List of (name, public_key_pem) tuples.
+        output_dir: Directory to write encrypted_secrets.bin.
+
+    Returns:
+        (encrypted_file_path, list of BeneficiaryKeyBlob)
+        Each BeneficiaryKeyBlob contains the beneficiary's name and their key_blob.
+
+    Raises:
+        FileNotFoundError: if plaintext_path does not exist.
+    """
+    plaintext_path = Path(plaintext_path)
+    output_dir     = Path(output_dir)
+
+    if not plaintext_path.exists():
+        raise FileNotFoundError(f"Secret file not found: {plaintext_path}")
+
+    if not beneficiaries:
+        raise ValueError("At least one beneficiary is required")
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    encrypted_path = output_dir / "encrypted_secrets.bin"
+
+    aes_key = generate_aes_key()
+    nonce   = os.urandom(GCM_NONCE_SIZE)
+
+    aesgcm     = AESGCM(aes_key)
+    plaintext  = plaintext_path.read_bytes()
+    ciphertext = aesgcm.encrypt(nonce, plaintext, associated_data=None)
+
+    encrypted_path.write_bytes(nonce + ciphertext)
+
+    key_blobs = []
+    for name, public_key_pem in beneficiaries:
+        encrypted_aes_key = _rsa_encrypt_key(aes_key, public_key_pem)
+        key_blob_b64 = base64.b64encode(encrypted_aes_key).decode("utf-8")
+        key_blobs.append(BeneficiaryKeyBlob(name=name, key_blob=key_blob_b64))
+
+    aes_key_ba = bytearray(aes_key)
+    _zero_memory(aes_key_ba)
+    del aes_key_ba
+
+    return encrypted_path, key_blobs
+
+
+def encrypt_for_single_beneficiary(
+    plaintext_path: Path,
+    beneficiary_name: str,
+    recipient_public_key_pem: bytes,
+    output_dir: Path,
+) -> tuple[Path, BeneficiaryKeyBlob]:
+    """
+    Encrypt a secret file for a single beneficiary.
+
+    Args:
+        plaintext_path: Path to the file to encrypt.
+        beneficiary_name: Name of the beneficiary.
+        recipient_public_key_pem: Beneficiary's RSA-4096 public key (PEM bytes).
+        output_dir: Directory to write encrypted_secrets.bin.
+
+    Returns:
+        (encrypted_file_path, BeneficiaryKeyBlob)
+    """
+    encrypted_path, key_blobs = encrypt_for_multiple_beneficiaries(
+        plaintext_path=plaintext_path,
+        beneficiaries=[(beneficiary_name, recipient_public_key_pem)],
+        output_dir=output_dir,
+    )
+    return encrypted_path, key_blobs[0]
 
 
 # ---------------------------------------------------------------------------

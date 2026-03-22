@@ -51,11 +51,18 @@ class BeneficiaryConfig:
 
 
 @dataclass
+class BeneficiaryVault:
+    """Encrypted key blob and metadata for a single beneficiary."""
+    beneficiary_name: str         # Name matching a BeneficiaryConfig
+    key_blob: str                # base64(RSA-encrypted AES key) — never log this
+
+
+@dataclass
 class VaultConfig:
     """Metadata about the encrypted secret payload."""
     secret_file_path: str          # Original plaintext path (for reference/re-encryption)
     encrypted_file_path: str       # Path to encrypted_secrets.bin
-    key_blob: str                  # base64(RSA-encrypted AES key) — never log this
+    beneficiaries: list[BeneficiaryVault]  # Key blobs for each beneficiary
     ipfs_cid: Optional[str] = None # IPFS CID if the file was uploaded to IPFS
 
 
@@ -90,10 +97,14 @@ def _config_from_dict(d: dict) -> LazarusConfig:
     beneficiary = BeneficiaryConfig(**d["beneficiary"])
 
     vault_d = d["vault"]
-    vault   = VaultConfig(
+    beneficiaries = [
+        BeneficiaryVault(**b) for b in vault_d.get("beneficiaries", [])
+    ]
+
+    vault = VaultConfig(
         secret_file_path    = vault_d["secret_file_path"],
         encrypted_file_path = vault_d["encrypted_file_path"],
-        key_blob            = vault_d["key_blob"],
+        beneficiaries       = beneficiaries,
         ipfs_cid            = vault_d.get("ipfs_cid"),
     )
 
@@ -301,13 +312,47 @@ def validate_config(config: LazarusConfig) -> list[str]:
     if not enc_path.exists():
         errors.append(f"encrypted vault file not found: {enc_path}")
 
-    if not config.vault.key_blob:
-        errors.append("vault.key_blob is empty — vault cannot be decrypted")
+    if not config.vault.beneficiaries:
+        errors.append("vault.beneficiaries is empty — vault cannot be decrypted")
 
     if config.checkin_interval_days < 1:
         errors.append(f"checkin_interval_days must be >= 1, got {config.checkin_interval_days}")
 
     return errors
+
+
+def get_beneficiary_key_blob(config: LazarusConfig, beneficiary_name: str) -> str | None:
+    """
+    Get the key_blob for a specific beneficiary by name.
+
+    Returns:
+        The key_blob string if found, None otherwise.
+    """
+    for b in config.vault.beneficiaries:
+        if b.beneficiary_name == beneficiary_name:
+            return b.key_blob
+    return None
+
+
+def add_beneficiary_vault(config: LazarusConfig, name: str, key_blob: str) -> LazarusConfig:
+    """
+    Add a beneficiary vault entry to the config.
+
+    Returns updated config — caller must save_config().
+    """
+    from dataclasses import replace
+    new_beneficiary = BeneficiaryVault(beneficiary_name=name, key_blob=key_blob)
+    new_beneficiaries = config.vault.beneficiaries + [new_beneficiary]
+    new_vault = replace(config.vault, beneficiaries=new_beneficiaries)
+    return replace(config, vault=new_vault)
+
+
+def get_vault_size(config: LazarusConfig) -> int:
+    """Get the size of the encrypted vault file in bytes."""
+    enc_path = Path(config.vault.encrypted_file_path)
+    if enc_path.exists():
+        return enc_path.stat().st_size
+    return 0
 
 
 # ---------------------------------------------------------------------------
