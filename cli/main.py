@@ -162,8 +162,8 @@ def doctor():
 @cli.command()
 def init():
     """Setup wizard — create and arm your vault."""
-    console.print("[bold yellow]Lazarus Init Wizard[/bold yellow]")
-    raise NotImplementedError("init wizard not yet implemented")
+    from cli.setup import run_setup_wizard
+    run_setup_wizard()
 
 
 @cli.command()
@@ -314,16 +314,86 @@ def agent():
 
 @agent.command("start")
 def agent_start():
-    """Start the background heartbeat agent."""
-    console.print("[green]Agent starting...[/green]")
-    raise NotImplementedError
+    """Start the background heartbeat agent via systemd."""
+    import shutil
+    import subprocess
+    import os
+
+    if shutil.which("systemctl") is None:
+        console.print("[red]systemd not found. Please install and configure the agent manually.[/red]")
+        console.print("See: https://github.com/ravikumarve/lazarus#running-the-agent")
+        return
+
+    service_path = Path("/etc/systemd/system/lazarus.service")
+    if not service_path.exists():
+        console.print("[yellow]Lazarus systemd service not installed.[/yellow]")
+        install = click.confirm("Install the systemd service now?", default=True)
+        if not install:
+            console.print("[yellow]Cannot start agent without systemd service.[/yellow]")
+            return
+
+        src_service = Path(__file__).parent.parent / "lazarus.service"
+        if not src_service.exists():
+            console.print("[red]lazarus.service not found in package.[/red]")
+            return
+
+        try:
+            with open(src_service) as f:
+                content = f.read()
+
+            content = content.replace("YOUR_USERNAME", os.environ.get("USER", "root"))
+            content = content.replace("/home/YOUR_USERNAME/lazarus", str(Path(__file__).parent.parent.parent))
+            venv_python = shutil.which("python") or shutil.which("python3") or ""
+            content = content.replace(
+                "/home/YOUR_USERNAME/lazarus/venv/bin/python",
+                venv_python
+            )
+
+            with open("/etc/systemd/system/lazarus.service", "w") as f:
+                f.write(content)
+
+            subprocess.run(["sudo", "systemctl", "daemon-reload"], check=True)
+            console.print("[green]Systemd service installed.[/green]")
+        except PermissionError:
+            console.print("[red]Permission denied. Run: sudo lazarus agent start[/red]")
+            return
+        except Exception as e:
+            console.print(f"[red]Failed to install service: {e}[/red]")
+            return
+
+    try:
+        subprocess.run(["sudo", "systemctl", "enable", "lazarus.service"], check=True, capture_output=True)
+        result = subprocess.run(["sudo", "systemctl", "start", "lazarus.service"], capture_output=True, text=True)
+        if result.returncode == 0:
+            console.print("[green]✔ Agent started successfully.[/green]")
+            _log_event("AGENT", "Heartbeat agent started via systemd")
+        else:
+            console.print(f"[red]Failed to start agent: {result.stderr}[/red]")
+    except subprocess.CalledProcessError as e:
+        console.print(f"[red]systemctl error: {e}[/red]")
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
 
 
 @agent.command("stop")
 def agent_stop():
-    """Stop the background heartbeat agent."""
-    console.print("[yellow]Agent stopping...[/yellow]")
-    raise NotImplementedError
+    """Stop the background heartbeat agent via systemd."""
+    import shutil
+    import subprocess
+
+    if shutil.which("systemctl") is None:
+        console.print("[red]systemd not found.[/red]")
+        return
+
+    try:
+        result = subprocess.run(["sudo", "systemctl", "stop", "lazarus.service"], capture_output=True, text=True)
+        if result.returncode == 0:
+            console.print("[green]✔ Agent stopped.[/green]")
+            _log_event("AGENT", "Heartbeat agent stopped via systemd")
+        else:
+            console.print(f"[red]Failed to stop agent: {result.stderr}[/red]")
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
 
 
 @agent.command("status")
@@ -425,16 +495,137 @@ def freeze(days: int):
 @cli.command("test-trigger")
 def test_trigger():
     """Dry run — simulate delivery without actually sending anything."""
-    console.print("[bold magenta]Test trigger (dry run)[/bold magenta]")
-    raise NotImplementedError
+    from core.encryption import load_public_key_from_file, encrypt_for_multiple_beneficiaries
+    from pathlib import Path
+    import os
+
+    console.print("\n[bold magenta]Lazarus Protocol — Test Trigger (Dry Run)[/bold magenta]\n")
+    console.print("[yellow]This is a simulation. No emails will be sent.[/yellow]\n")
+
+    try:
+        config = load_config()
+    except FileNotFoundError:
+        console.print("[red]Lazarus not initialized. Run: lazarus init[/red]")
+        return
+
+    days_since = days_since_checkin(config)
+    days_rem = days_remaining(config)
+
+    console.print(f"[cyan]Owner:[/cyan] {config.owner_name}")
+    console.print(f"[cyan]Email:[/cyan] {config.owner_email}")
+    console.print(f"[cyan]Days since check-in:[/cyan] {days_since:.1f}")
+    console.print(f"[cyan]Days remaining:[/cyan] {days_rem:.1f}")
+    console.print()
+
+    if days_rem > 0:
+        console.print("[green]✓ Vault is healthy — would NOT trigger delivery[/green]\n")
+        console.print("[yellow]To test delivery, run:[/yellow]")
+        console.print("[dim]  touch ~/.lazarus/.force_trigger[/dim]")
+        console.print("[dim]  lazarus agent check[/dim]\n")
+        return
+
+    console.print("[red]⚠ Vault has expired — delivery would be triggered![/red]\n")
+
+    table = Table(title="Beneficiaries (Delivery Targets)", show_header=True, header_style="bold cyan")
+    table.add_column("Name", style="cyan")
+    table.add_column("Email", style="white")
+    table.add_column("Status", style="green")
+
+    for vault in config.vault.beneficiaries:
+        beneficiary_config = None
+        for b in [config.beneficiary] if hasattr(config, 'beneficiary') else []:
+            if hasattr(b, 'name') and b.name == vault.beneficiary_name:
+                beneficiary_config = b
+                break
+
+        email = getattr(beneficiary_config, 'email', 'unknown') if beneficiary_config else 'unknown'
+        table.add_row(vault.beneficiary_name, email, "[yellow]WOULD SEND[/yellow]")
+
+    console.print(table)
+    console.print()
+
+    console.print("[bold cyan]Email Content (Simulated):[/bold cyan]\n")
+    console.print("[dim]Subject:[/dim] [Lazarus] You have received an inheritance from {}\n".format(config.owner_name))
+    console.print("[dim]Attachments:[/dim]")
+    console.print("  - encrypted_secrets.bin (vault payload)")
+    console.print("  - decryption_kit.zip (decrypt.py + key_blob.txt + INSTRUCTIONS.txt)\n")
+    console.print("[yellow]To actually trigger, run: lazarus agent check --force[/yellow]")
 
 
 @cli.command("update-secret")
 @click.argument("new_secret_path", type=click.Path(exists=True))
 def update_secret(new_secret_path: str):
-    """Replace the encrypted secret file with a new one."""
-    console.print(f"[green]Updating secret from: {new_secret_path}[/green]")
-    raise NotImplementedError
+    """Replace the encrypted secret file with a new one (re-encrypts for all beneficiaries)."""
+    from core.encryption import load_public_key_from_file, encrypt_for_multiple_beneficiaries
+    from pathlib import Path
+    import os
+
+    new_path = Path(new_secret_path).resolve()
+    console.print(f"\n[bold cyan]Lazarus Protocol — Update Secret[/bold cyan]\n")
+    console.print(f"[yellow]New secret file:[/yellow] {new_path}\n")
+
+    if not new_path.exists():
+        console.print(f"[red]Error: File not found: {new_path}[/red]")
+        return
+
+    try:
+        config = load_config()
+    except FileNotFoundError:
+        console.print("[red]Lazarus not initialized. Run: lazarus init[/red]")
+        return
+
+    if not new_path.is_file():
+        console.print("[red]Error: Not a file.[/red]")
+        return
+
+    confirm = click.confirm(
+        f"Replace existing vault and re-encrypt for {len(config.vault.beneficiaries)} beneficiary(ies)?",
+        default=False
+    )
+    if not confirm:
+        console.print("[yellow]Cancelled.[/yellow]")
+        return
+
+    output_dir = Path(config.vault.encrypted_file_path).parent
+
+    try:
+        beneficiary_configs = []
+        for vault in config.vault.beneficiaries:
+            if hasattr(config, 'beneficiary') and config.beneficiary.name == vault.beneficiary_name:
+                pub_key = load_public_key_from_file(Path(config.beneficiary.public_key_path))
+                beneficiary_configs.append({
+                    'name': vault.beneficiary_name,
+                    'email': config.beneficiary.email,
+                    'public_key_pem': pub_key,
+                })
+
+        if not beneficiary_configs:
+            console.print("[red]No beneficiary configurations found.[/red]")
+            console.print("[yellow]Use 'lazarus add-beneficiary' to add beneficiaries first.[/yellow]")
+            return
+
+        all_key_blobs, new_encrypted_path = encrypt_for_multiple_beneficiaries(
+            plaintext_path=new_path,
+            beneficiaries=beneficiary_configs,
+            output_dir=output_dir,
+        )
+
+        config.vault.encrypted_file_path = str(new_encrypted_path)
+        config.vault.secret_file_path = str(new_path)
+
+        for vault, blob in zip(config.vault.beneficiaries, all_key_blobs):
+            vault.key_blob = blob.key_blob
+
+        save_config(config)
+
+        _log_event("SECRET_UPDATED", f"Owner {config.owner_name} updated secret file to: {new_path}")
+        console.print(f"[green]✔ Secret updated successfully![/green]\n")
+        console.print(f"[cyan]New encrypted file:[/cyan] {new_encrypted_path.name}")
+        console.print(f"[cyan]Beneficiaries re-encrypted:[/cyan] {len(all_key_blobs)}")
+        console.print(f"\n[yellow]Note: Each beneficiary will receive their updated key_blob upon next delivery.[/yellow]")
+
+    except Exception as e:
+        console.print(f"[red]Error updating secret: {e}[/red]")
 
 
 @cli.command("add-beneficiary")

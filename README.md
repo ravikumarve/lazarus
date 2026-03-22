@@ -155,11 +155,35 @@ python -m lazarus ping
 | `lazarus init` | Setup wizard — create your vault |
 | `lazarus ping` | Manual check-in (resets the timer) |
 | `lazarus status` | Show vault status, days remaining |
-| `lazarus agent start` | Start the background heartbeat agent |
-| `lazarus agent stop` | Stop the agent |
+| `lazarus doctor` | System diagnostics — verify installation |
+| `lazarus agent start` | Start the background heartbeat agent (systemd) |
+| `lazarus agent stop` | Stop the agent (systemd) |
+| `lazarus agent status` | Show agent health: running/stopped, PID, last heartbeat |
 | `lazarus freeze --days 30` | Panic button — extend deadline by N days |
 | `lazarus test-trigger` | Dry run — simulate delivery without sending |
-| `lazarus update-secret` | Replace the secret file with a new one |
+| `lazarus update-secret <path>` | Replace the secret file (re-encrypts for all beneficiaries) |
+| `lazarus add-beneficiary` | Add a new beneficiary who can decrypt the vault |
+
+---
+
+## Web Dashboard
+
+Lazarus includes a real-time web dashboard for monitoring your vault status:
+
+```bash
+# Start the dashboard
+python -m web.server
+
+# Access at
+http://localhost:7777
+```
+
+The dashboard displays:
+- Vault status (armed/triggered)
+- Days since last check-in
+- Days remaining until trigger
+- Agent health and heartbeat history
+- Delivery log
 
 ---
 
@@ -208,10 +232,13 @@ No blockchain knowledge required. No MetaMask. No IPFS. Just a Python script and
 - [x] IPFS storage layer
 - [x] CLI setup wizard
 - [x] Heartbeat agent with APScheduler
-- [x] Email delivery system
+- [x] Email delivery system (SendGrid)
 - [x] Telegram alerts
 - [x] Beneficiary decryption kit
 - [x] Multi-beneficiary support
+- [x] Web dashboard (localhost:7777)
+- [x] Agent reliability (retry logic, dead agent detection, idempotent triggers)
+- [x] System diagnostics (`lazarus doctor`)
 - [ ] Desktop GUI (Electron / Tkinter) — Pro tier
 - [ ] Legal document storage support
 
