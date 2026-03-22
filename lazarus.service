@@ -1,0 +1,55 @@
+# Lazarus Protocol — systemd service unit file
+# =============================================================================
+# INSTALLATION:
+#   1. Copy this file to /etc/systemd/system/lazarus.service
+#      sudo cp lazarus.service /etc/systemd/system/
+#
+#   2. Edit the paths below to match your installation:
+#      - User/Group: set to the user running Lazarus
+#      - WorkingDirectory: path to Lazarus installation
+#      - ExecStart: path to Python virtual environment
+#
+#   3. Reload systemd and enable the service:
+#      sudo systemctl daemon-reload
+#      sudo systemctl enable lazarus.service
+#
+#   4. Start the service:
+#      sudo systemctl start lazarus.service
+#
+# USAGE:
+#   sudo systemctl status lazarus.service  # Check status
+#   sudo systemctl restart lazarus.service # Restart
+#   sudo systemctl stop lazarus.service    # Stop
+#   journalctl -u lazarus.service          # View logs
+# =============================================================================
+
+[Unit]
+Description=Lazarus Protocol Dead Man's Switch
+Documentation=https://github.com/yourusername/lazarus
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=YOUR_USERNAME
+Group=YOUR_USERNAME
+WorkingDirectory=/home/YOUR_USERNAME/lazarus
+Environment="PATH=/home/YOUR_USERNAME/lazarus/venv/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="PYTHONPATH=/home/YOUR_USERNAME/lazarus"
+
+ExecStart=/home/YOUR_USERNAME/lazarus/venv/bin/python -m agent.heartbeat
+
+Restart=on-failure
+RestartSec=30
+StandardOutput=journal
+StandardError=journal
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/home/YOUR_USERNAME/.lazarus
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

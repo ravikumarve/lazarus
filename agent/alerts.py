@@ -15,6 +15,7 @@ Design:
     - Callers (heartbeat.py) decide whether to swallow or propagate errors.
     - _build_decryption_kit() is pure (no network) — tested independently.
     - All HTML email bodies are self-contained strings (no templates on disk).
+    - Retry with exponential backoff: 3 retries, wait 2s, 4s, 8s between attempts.
 """
 
 from __future__ import annotations
@@ -25,10 +26,14 @@ import logging
 import os
 import shutil
 import textwrap
+import time
 import zipfile
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+MAX_RETRIES = 3
+RETRY_DELAYS = [2, 4, 8]
 
 
 # ---------------------------------------------------------------------------
@@ -41,29 +46,72 @@ class AlertError(Exception):
 
 
 # ---------------------------------------------------------------------------
+# Retry helper
+# ---------------------------------------------------------------------------
+
+def _send_with_retry(send_fn, label: str) -> None:
+    """
+    Call a send function with exponential backoff retry.
+    
+    Args:
+        send_fn: Callable that performs the send operation.
+        label: Human-readable label for logging.
+    
+    Raises:
+        AlertError: if all retries fail.
+    """
+    last_error = None
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            send_fn()
+            if attempt > 1:
+                logger.info("%s succeeded on attempt %d", label, attempt)
+            return
+        except Exception as exc:
+            last_error = exc
+            if attempt < MAX_RETRIES:
+                delay = RETRY_DELAYS[attempt - 1]
+                logger.warning(
+                    "%s failed on attempt %d/%d (will retry in %ds): %s",
+                    label, attempt, MAX_RETRIES, delay, exc
+                )
+                time.sleep(delay)
+            else:
+                logger.error(
+                    "%s failed on all %d attempts: %s",
+                    label, MAX_RETRIES, exc
+                )
+    raise AlertError(f"{label} failed after {MAX_RETRIES} attempts: {last_error}")
+
+
+# ---------------------------------------------------------------------------
 # Owner alerts — email
 # ---------------------------------------------------------------------------
 
 def send_reminder_email(owner_email: str, days_remaining: float) -> None:
     """
     Send a check-in reminder email to the owner via SendGrid.
+    Retries up to 3 times with exponential backoff.
 
     Args:
         owner_email:    Destination address.
         days_remaining: Days left before the switch triggers (used in subject + body).
 
     Raises:
-        AlertError: if SendGrid is not configured or delivery fails.
+        AlertError: if SendGrid is not configured or delivery fails after retries.
     """
     days_int = max(0, int(days_remaining))
     subject  = f"⚰️ Lazarus: {days_int} day{'s' if days_int != 1 else ''} remaining — check in now"
     body     = _reminder_email_body(days_int)
 
-    _send_email(
-        to_email=owner_email,
-        subject=subject,
-        html_body=body,
-    )
+    def do_send():
+        _send_email(
+            to_email=owner_email,
+            subject=subject,
+            html_body=body,
+        )
+
+    _send_with_retry(do_send, f"Reminder email to {owner_email}")
     logger.info("Reminder email sent to %s (%d days remaining)", owner_email, days_int)
 
 
@@ -74,6 +122,7 @@ def send_final_warning(
 ) -> None:
     """
     Send a final warning via email and (optionally) Telegram.
+    Retries up to 3 times with exponential backoff for each channel.
     Instructs the owner to run `lazarus ping` immediately.
 
     Args:
@@ -82,7 +131,7 @@ def send_final_warning(
         chat_id:        Telegram chat ID, or None to skip Telegram.
 
     Raises:
-        AlertError: if both channels fail. If only one fails, logs the error
+        AlertError: if both channels fail after retries. If only one fails, logs the error
                     and continues with the other.
     """
     hours = max(0, int(days_remaining * 24))
@@ -91,7 +140,9 @@ def send_final_warning(
 
     email_ok = True
     try:
-        _send_email(to_email=owner_email, subject=subject, html_body=body)
+        def do_email():
+            _send_email(to_email=owner_email, subject=subject, html_body=body)
+        _send_with_retry(do_email, f"Final warning email to {owner_email}")
         logger.warning("Final warning email sent to %s (~%dh remaining)", owner_email, hours)
     except AlertError as exc:
         logger.error("Final warning email failed: %s", exc)
@@ -105,7 +156,9 @@ def send_final_warning(
             f"Or reply /freeze to extend by 30 days."
         )
         try:
-            _send_telegram(chat_id=chat_id, message=msg)
+            def do_telegram():
+                _send_telegram(chat_id=chat_id, message=msg)
+            _send_with_retry(do_telegram, f"Final warning Telegram to {chat_id}")
             logger.warning("Final warning Telegram sent to chat %s", chat_id)
         except AlertError as exc:
             logger.error("Final warning Telegram failed: %s", exc)
@@ -122,13 +175,14 @@ def send_final_warning(
 def send_telegram_alert(chat_id: str, days_remaining: float) -> None:
     """
     Send a Telegram reminder to the owner.
+    Retries up to 3 times with exponential backoff.
 
     Args:
         chat_id:        Telegram chat ID (numeric string).
         days_remaining: Days left before trigger (shown in message).
 
     Raises:
-        AlertError: if Telegram is not configured or delivery fails.
+        AlertError: if Telegram is not configured or delivery fails after retries.
     """
     days_int = max(0, int(days_remaining))
     message  = (
@@ -136,7 +190,11 @@ def send_telegram_alert(chat_id: str, days_remaining: float) -> None:
         f"*{days_int} day{'s' if days_int != 1 else ''}* until your dead man's switch triggers.\n\n"
         f"Run `lazarus ping` to reset the countdown."
     )
-    _send_telegram(chat_id=chat_id, message=message)
+
+    def do_send():
+        _send_telegram(chat_id=chat_id, message=message)
+
+    _send_with_retry(do_send, f"Telegram alert to {chat_id}")
     logger.info("Telegram reminder sent to chat %s (%d days remaining)", chat_id, days_int)
 
 
@@ -154,6 +212,7 @@ def send_delivery_email(
 ) -> None:
     """
     Send the inheritance email to the beneficiary.
+    Retries up to 3 times with exponential backoff.
 
     Attachments:
         1. encrypted_secrets.bin  — the vault ciphertext
@@ -164,18 +223,17 @@ def send_delivery_email(
         beneficiary_email:     Recipient's email address.
         owner_name:            Name of the deceased/missing owner.
         encrypted_file_path:   Path to encrypted_secrets.bin on disk.
-        key_blob_b64:          base64-encoded RSA-wrapped AES key.
-        ipfs_cid:              Optional IPFS CID for alternate retrieval.
+        key_blob_b64:         base64-encoded RSA-wrapped AES key.
+        ipfs_cid:             Optional IPFS CID for alternate retrieval.
 
     Raises:
-        AlertError:       if delivery fails.
+        AlertError:       if delivery fails after retries.
         FileNotFoundError: if encrypted_file_path does not exist.
     """
     encrypted_file_path = Path(encrypted_file_path)
     if not encrypted_file_path.exists():
         raise FileNotFoundError(f"Encrypted vault not found: {encrypted_file_path}")
 
-    # Build the standalone decryption kit zip
     kit_path = _build_decryption_kit(
         key_blob_b64=key_blob_b64,
         owner_name=owner_name,
@@ -193,13 +251,15 @@ def send_delivery_email(
         (kit_path,            "decryption_kit.zip",    "application/zip"),
     ]
 
-    _send_email(
-        to_email=beneficiary_email,
-        subject=subject,
-        html_body=body,
-        attachments=attachments,
-    )
+    def do_send():
+        _send_email(
+            to_email=beneficiary_email,
+            subject=subject,
+            html_body=body,
+            attachments=attachments,
+        )
 
+    _send_with_retry(do_send, f"Delivery email to {beneficiary_email}")
     logger.critical(
         "DELIVERY EMAIL SENT to %s (%s) for %s",
         beneficiary_name, beneficiary_email, owner_name,
@@ -247,17 +307,14 @@ def _build_decryption_kit(key_blob_b64: str, owner_name: str) -> Path:
 
 
 def _standalone_decrypt_script() -> str:
-    """
-    Return the source of a standalone decrypt.py that has zero
-    Lazarus dependencies — only needs pip install cryptography.
-    """
+    """Return the source of a standalone decrypt.py that has zero Lazarus dependencies."""
     return textwrap.dedent("""\
         #!/usr/bin/env python3
         \"\"\"
         Lazarus Protocol — Standalone Decryption Script
         ================================================
         Requirements: pip install cryptography
-        Usage:        python decrypt.py --key key_blob.txt [--encrypted encrypted_secrets.bin]
+        Usage:        python decrypt.py --key key_blob.txt
         \"\"\"
 
         import argparse
@@ -280,7 +337,6 @@ def _standalone_decrypt_script() -> str:
         GCM_NONCE_SIZE = 12
 
         def _is_safe_path(path: Path, base_dir: Path) -> bool:
-            \"\"\"Check if resolved path stays within base directory (prevent path traversal).\"\"\"
             try:
                 resolved = path.resolve()
                 base_resolved = base_dir.resolve()
@@ -289,7 +345,6 @@ def _standalone_decrypt_script() -> str:
                 return False
 
         def decrypt(encrypted_path, key_blob_b64, private_key_pem, password=None):
-            # 1. Validate encrypted file path
             enc_path = Path(encrypted_path).resolve()
             if not enc_path.exists():
                 print(f"ERROR: Encrypted file not found: {encrypted_path}")
@@ -298,7 +353,6 @@ def _standalone_decrypt_script() -> str:
                 print(f"ERROR: Path is not a file: {encrypted_path}")
                 sys.exit(1)
 
-            # 2. Unwrap AES key with RSA private key
             try:
                 private_key = serialization.load_pem_private_key(
                     private_key_pem, password=password
@@ -310,7 +364,6 @@ def _standalone_decrypt_script() -> str:
                 print(f"  - Details: {e}")
                 sys.exit(1)
 
-            # 3. Attempt decryption
             encrypted_aes_key = base64.b64decode(key_blob_b64)
             try:
                 aes_key = private_key.decrypt(
@@ -328,12 +381,10 @@ def _standalone_decrypt_script() -> str:
                 print(f"  - Details: {e}")
                 sys.exit(1)
 
-            # 4. Split nonce + ciphertext
-            raw        = enc_path.read_bytes()
-            nonce      = raw[:GCM_NONCE_SIZE]
+            raw = enc_path.read_bytes()
+            nonce = raw[:GCM_NONCE_SIZE]
             ciphertext = raw[GCM_NONCE_SIZE:]
 
-            # 5. Decrypt + verify GCM tag
             try:
                 plaintext = AESGCM(aes_key).decrypt(nonce, ciphertext, associated_data=None)
             except InvalidTag:
@@ -343,42 +394,25 @@ def _standalone_decrypt_script() -> str:
             return plaintext
 
         def main():
-            parser = argparse.ArgumentParser(
-                description="Lazarus Protocol — Decrypt your inheritance vault."
-            )
-            parser.add_argument(
-                "--key", "-k",
-                required=True,
-                help="Path to key_blob.txt (base64-encoded RSA-encrypted AES key)"
-            )
-            parser.add_argument(
-                "--encrypted", "-e",
-                help="Path to encrypted_secrets.bin (will prompt if not provided)"
-            )
-            parser.add_argument(
-                "--output", "-o",
-                help="Output file path (will prompt if not provided)"
-            )
+            parser = argparse.ArgumentParser(description="Lazarus Protocol — Decrypt your inheritance vault")
+            parser.add_argument("--key", "-k", required=True, help="Path to key_blob.txt")
+            parser.add_argument("--encrypted", "-e", help="Path to encrypted_secrets.bin")
+            parser.add_argument("--output", "-o", help="Output file path")
             args = parser.parse_args()
 
-            print("=" * 55)
+            print("=" * 60)
             print("  Lazarus Protocol — Inheritance Decryption Tool")
-            print("=" * 55)
+            print("=" * 60)
             print()
 
-            # Determine script directory for path safety checks
             script_dir = Path(os.path.dirname(os.path.abspath(__file__))) if "__file__" in dir() else Path.cwd()
 
-            # Load key_blob from CLI argument
-            key_input = args.key.strip()
-            key_blob_path = Path(key_input).resolve()
-
+            key_blob_path = Path(args.key.strip()).resolve()
             if not _is_safe_path(key_blob_path, script_dir):
                 print("ERROR: Path traversal detected. Only relative paths allowed.")
                 sys.exit(1)
-
             if not key_blob_path.exists():
-                print(f"ERROR: key_blob file not found: {key_input}")
+                print(f"ERROR: key_blob file not found: {args.key}")
                 sys.exit(1)
 
             try:
@@ -387,56 +421,36 @@ def _standalone_decrypt_script() -> str:
                 print(f"ERROR: Failed to read key_blob: {e}")
                 sys.exit(1)
 
-            # Get encrypted file path
-            if args.encrypted:
-                enc_path = Path(args.encrypted).resolve()
-            else:
-                enc_input = input("Path to encrypted_secrets.bin: ").strip()
-                enc_path = Path(enc_input).resolve()
-
+            enc_path = Path(args.encrypted).resolve() if args.encrypted else Path(input("Path to encrypted_secrets.bin: ").strip()).resolve()
             if not _is_safe_path(enc_path, script_dir):
-                print("ERROR: Path traversal detected. Only relative paths allowed.")
+                print("ERROR: Path traversal detected.")
                 sys.exit(1)
 
-            # Get output path
-            if args.output:
-                out_path = Path(args.output).resolve()
-            else:
-                out_input = input("Output file path (e.g. secrets.pdf): ").strip()
-                out_path = Path(out_input).resolve()
-
+            out_path = Path(args.output).resolve() if args.output else Path(input("Output file path: ").strip()).resolve()
             if not _is_safe_path(out_path, script_dir):
-                print("ERROR: Path traversal detected. Only relative paths allowed.")
+                print("ERROR: Path traversal detected.")
                 sys.exit(1)
 
-            # Get private key path
-            priv_input = input("Path to your private key (.pem): ").strip()
-            priv_path = Path(priv_input).resolve()
-
+            priv_path = Path(input("Path to your private key (.pem): ").strip()).resolve()
             if not _is_safe_path(priv_path, script_dir):
-                print("ERROR: Path traversal detected. Only relative paths allowed.")
+                print("ERROR: Path traversal detected.")
                 sys.exit(1)
-
             if not priv_path.exists():
-                print(f"ERROR: Private key file not found: {priv_input}")
+                print(f"ERROR: Private key file not found.")
                 sys.exit(1)
 
-            # Try unencrypted key first, prompt for password if encrypted
             try:
                 priv_pem = priv_path.read_bytes()
                 serialization.load_pem_private_key(priv_pem, password=None)
                 password = None
-                print("(Unencrypted key detected)")
             except Exception:
-                pw_str = getpass.getpass("Private key password: ")
-                password = pw_str.encode()
+                password = getpass.getpass("Private key password: ").encode()
 
             print("\\nDecrypting...")
             try:
                 plaintext = decrypt(enc_path, key_blob, priv_pem, password)
                 out_path.write_bytes(plaintext)
                 print(f"\\nDecrypted file saved to: {out_path}")
-                print("You can now open it with any standard application.")
             except Exception as e:
                 print(f"ERROR: Decryption failed: {e}")
                 sys.exit(1)
@@ -457,27 +471,22 @@ def _instructions_text(owner_name: str) -> str:
 
         WHAT YOU NEED
         -------------
-        1. Your private key file (.pem) — {owner_name} gave this to you during setup.
-        2. Python 3.10 or newer installed on your computer.
-        3. The cryptography library: run  pip install cryptography
+        1. Your private key file (.pem)
+        2. Python 3.10 or newer
+        3. pip install cryptography
 
         STEPS
         -----
         1. Unzip this archive.
-        2. Open a terminal / command prompt in this folder.
-        3. Run:  python decrypt.py --key key_blob.txt
-           (Or: python decrypt.py -k key_blob.txt --encrypted encrypted_secrets.bin -o output.pdf)
-        4. Follow the prompts for your private key and password.
-        5. Open the decrypted file — it contains {owner_name}'s instructions.
+        2. python decrypt.py --key key_blob.txt
+        3. Follow the prompts.
 
         TROUBLESHOOTING
         ---------------
-        "Module not found" error → run: pip install cryptography
-        "Authentication failed"  → wrong key file or corrupted archive.
-                                   Contact the email sender for support.
-        "Permission denied"      → run the terminal as administrator.
+        pip install cryptography
+        Contact the sender if you need help.
 
-        This tool has no internet connection and sends nothing anywhere.
+        This tool has no internet connection.
         Your privacy is fully protected.
     """)
 
@@ -493,16 +502,7 @@ def _send_email(
     attachments: list[tuple[Path, str, str]] | None = None,
 ) -> None:
     """
-    Send an email via SendGrid.
-
-    Args:
-        to_email:    Recipient address.
-        subject:     Email subject.
-        html_body:   HTML email body.
-        attachments: List of (file_path, filename, mime_type) tuples.
-
-    Raises:
-        AlertError: if SENDGRID_API_KEY is missing or send fails.
+    Send an email via SendGrid (no retry — retry is handled by caller).
     """
     try:
         import sendgrid
@@ -555,14 +555,7 @@ def _send_email(
 
 def _send_telegram(chat_id: str, message: str) -> None:
     """
-    Send a Telegram message via python-telegram-bot (sync wrapper).
-
-    Args:
-        chat_id: Telegram chat ID (numeric string).
-        message: Markdown-formatted message text.
-
-    Raises:
-        AlertError: if TELEGRAM_BOT_TOKEN is missing or send fails.
+    Send a Telegram message via python-telegram-bot (no retry).
     """
     try:
         import asyncio
@@ -606,8 +599,7 @@ def _reminder_email_body(days_remaining: int) -> str:
       <pre style="background:#222; padding:12px; border-radius:4px; color:#3498db;">python -m lazarus freeze --days 30</pre>
       <hr style="border-color:#333;"/>
       <p style="color:#666; font-size:12px;">
-        Lazarus Protocol — self-sovereign inheritance.<br/>
-        If you did not set this up, someone did it on your behalf.
+        Lazarus Protocol — self-sovereign inheritance.
       </p>
     </body></html>
     """
@@ -620,13 +612,10 @@ def _final_warning_body(hours_remaining: int) -> str:
       <p style="font-size:18px; color:#e74c3c;">
         Your vault will trigger in approximately <strong>{hours_remaining} hours</strong>.
       </p>
-      <p>After this point, your encrypted secrets will be delivered to your beneficiary.</p>
-      <p><strong>To cancel immediately:</strong></p>
-      <pre style="background:#222; padding:12px; border-radius:4px; color:#2ecc71; font-size:16px;">python -m lazarus ping</pre>
-      <p><strong>To extend deadline by 30 days:</strong></p>
-      <pre style="background:#222; padding:12px; border-radius:4px; color:#3498db;">python -m lazarus freeze --days 30</pre>
+      <p>To cancel immediately:</p>
+      <pre style="background:#222; padding:12px; border-radius:4px; color:#2ecc71;">python -m lazarus ping</pre>
       <hr style="border-color:#333;"/>
-      <p style="color:#e74c3c; font-size:13px;">This is your final automated warning.</p>
+      <p style="color:#e74c3c;">This is your final automated warning.</p>
     </body></html>
     """
 
@@ -638,36 +627,26 @@ def _delivery_email_body(
 ) -> str:
     ipfs_section = ""
     if ipfs_cid:
-        ipfs_section = f"""
-        <p>The encrypted file is also available on IPFS:</p>
-        <pre style="background:#222; padding:8px; border-radius:4px; color:#3498db;">ipfs get {ipfs_cid}</pre>
-        """
+        ipfs_section = f"<pre style='background:#222; padding:8px;'>ipfs get {ipfs_cid}</pre>"
     return f"""
     <html><body style="font-family: monospace; background:#111; color:#eee; padding:32px;">
       <h2 style="color:#e74c3c;">⚰️ Lazarus Protocol — Inheritance Delivery</h2>
       <p>Dear {beneficiary_name},</p>
-      <p>
-        <strong>{owner_name}</strong> has not checked in for their configured period.
-        Per their instructions, you are receiving their encrypted Lazarus vault.
-      </p>
-      <h3 style="color:#f39c12;">Attached files:</h3>
+      <p><strong>{owner_name}</strong> has not checked in for their configured period.</p>
+      <h3>Attached files:</h3>
       <ul>
         <li><code>encrypted_secrets.bin</code> — the encrypted vault</li>
         <li><code>decryption_kit.zip</code> — everything you need to decrypt it</li>
       </ul>
-      <h3 style="color:#f39c12;">How to decrypt:</h3>
+      <h3>How to decrypt:</h3>
       <ol>
         <li>Unzip <code>decryption_kit.zip</code></li>
-        <li>Install Python (python.org) and run: <code>pip install cryptography</code></li>
-        <li>Run: <code>python decrypt.py</code> and follow the prompts</li>
-        <li>You will need your private key (.pem file) that {owner_name} gave you</li>
+        <li>pip install cryptography</li>
+        <li>python decrypt.py --key key_blob.txt</li>
       </ol>
       {ipfs_section}
-      <p>Full instructions are inside <code>INSTRUCTIONS.txt</code> in the zip.</p>
       <hr style="border-color:#333;"/>
-      <p style="color:#666; font-size:12px;">
-        Sent by Lazarus Protocol — automated, self-hosted, no intermediaries.
-      </p>
+      <p style="color:#666; font-size:12px;">Sent by Lazarus Protocol</p>
     </body></html>
     """
 

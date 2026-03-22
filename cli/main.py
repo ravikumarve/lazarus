@@ -17,7 +17,7 @@ Run with: python -m lazarus <command>
 
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, UTC
 from pathlib import Path
 
 import click
@@ -58,7 +58,7 @@ event_logger = logging.getLogger("lazarus.events")
 
 def _log_event(event_type: str, message: str) -> None:
     """Log an event to both file and console."""
-    timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+    timestamp = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
     log_entry = f"[{timestamp}] {event_type}: {message}"
     event_logger.info(log_entry)
 
@@ -168,6 +168,73 @@ def agent_stop():
     """Stop the background heartbeat agent."""
     console.print("[yellow]Agent stopping...[/yellow]")
     raise NotImplementedError
+
+
+@agent.command("status")
+def agent_status():
+    """Show agent health status: running/stopped, PID, last heartbeat, next check."""
+    from datetime import datetime
+
+    PID_FILE = LAZARUS_DIR / "agent.pid"
+    EVENTS_LOG = LAZARUS_DIR / "events.log"
+    DELIVERY_LOG = LAZARUS_DIR / "delivery.log"
+
+    table = Table(title="Lazarus Agent Health Status", show_header=True, header_style="bold cyan")
+    table.add_column("Field", style="bold")
+    table.add_column("Value", style="white")
+
+    if PID_FILE.exists():
+        try:
+            pid = int(PID_FILE.read_text().strip())
+            import os
+            if os.path.exists(f"/proc/{pid}"):
+                status = "[green]RUNNING[/green]"
+                status_value = f"RUNNING (PID: {pid})"
+            else:
+                status = "[yellow]STOPPED (stale PID file)[/yellow]"
+                status_value = f"STOPPED (stale PID: {pid})"
+        except (ValueError, IOError):
+            status = "[yellow]STOPPED[/yellow]"
+            status_value = "STOPPED"
+    else:
+        status = "[yellow]STOPPED[/yellow]"
+        status_value = "STOPPED"
+
+    table.add_row("Agent Status", status)
+
+    if EVENTS_LOG.exists():
+        try:
+            lines = EVENTS_LOG.read_text().strip().split('\n')
+            if lines:
+                last_event = lines[-1]
+                table.add_row("Last Event", last_event[:100])
+        except IOError:
+            pass
+
+    if DELIVERY_LOG.exists():
+        try:
+            delivery_lines = DELIVERY_LOG.read_text().strip().split('\n')
+            if delivery_lines:
+                last_delivery = delivery_lines[-1]
+                if "SUCCESS" in last_delivery:
+                    table.add_row("Last Delivery", "[green]SUCCESS[/green]")
+                else:
+                    table.add_row("Last Delivery", "[red]FAILED[/red]")
+        except IOError:
+            pass
+
+    try:
+        config = load_config()
+        since = days_since_checkin(config)
+        remaining = days_remaining(config)
+        table.add_row("Days Since Checkin", f"{since:.1f}")
+        table.add_row("Days Until Trigger", f"{remaining:.1f}")
+    except FileNotFoundError:
+        table.add_row("Config", "[yellow]Not initialized[/yellow]")
+    except Exception:
+        pass
+
+    console.print(table)
 
 
 @cli.command()
