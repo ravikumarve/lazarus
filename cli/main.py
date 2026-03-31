@@ -14,8 +14,12 @@ Commands:
 Run with: python -m lazarus <command>
 """
 
+import math
 import click
 from rich.console import Console
+
+from core.config import load_config, save_config, record_checkin, days_remaining
+from core.config import ConfigCorruptedError
 
 console = Console()
 
@@ -31,6 +35,7 @@ def cli():
 # lazarus init
 # ---------------------------------------------------------------------------
 
+
 @cli.command()
 def init():
     """
@@ -41,37 +46,68 @@ def init():
       - Entering beneficiary details + public key
       - Setting check-in interval
       - Encrypting and storing the vault
-
-    TODO: delegate to cli/setup.py::run_setup_wizard()
     """
-    console.print("[bold yellow]⚰️  Lazarus Init Wizard[/bold yellow]")
-    # TODO: from lazarus.cli.setup import run_setup_wizard; run_setup_wizard()
-    raise NotImplementedError("init wizard not yet implemented")
+    try:
+        from cli.setup import run_setup_wizard
+
+        run_setup_wizard()
+    except ImportError:
+        console.print("[red]Setup wizard dependencies not installed[/red]")
+        console.print("Run: pip install questionary")
+        raise
 
 
 # ---------------------------------------------------------------------------
 # lazarus ping
 # ---------------------------------------------------------------------------
 
+
 @cli.command()
 def ping():
     """
     Manual check-in — resets the countdown timer.
 
-    TODO:
-        1. Load config
-        2. Call config.record_checkin()
-        3. Save config
-        4. Print confirmation with days remaining
+    Loads the current config, records a check-in with the current timestamp,
+    saves the updated config, and displays the days remaining until trigger.
     """
-    console.print("[green]✔ Check-in recorded.[/green]")
-    # TODO: implement
-    raise NotImplementedError
+    try:
+        config = load_config()
+        config = record_checkin(config)
+        save_config(config)
+
+        remaining = days_remaining(config)
+
+        if math.isinf(remaining):
+            console.print("[green]✔ Check-in recorded.[/green]")
+            console.print(
+                "[yellow]⚠  No previous check-in found. Starting timer now.[/yellow]"
+            )
+        elif remaining > 0:
+            console.print(
+                f"[green]✔ Check-in recorded. {remaining:.1f} days remaining.[/green]"
+            )
+        else:
+            console.print(
+                f"[red]⚠  Check-in recorded but trigger is overdue by {-remaining:.1f} days.[/red]"
+            )
+
+    except FileNotFoundError:
+        console.print("[red]❌ Lazarus not initialized.[/red]")
+        console.print("Run: python -m lazarus init")
+        return
+    except ConfigCorruptedError as e:
+        console.print(f"[red]❌ Config file is corrupted: {e}[/red]")
+        console.print("Run: python -m lazarus init to recreate configuration")
+        return
+    except Exception as e:
+        console.print(f"[red]❌ Error recording check-in: {e}[/red]")
+        return
 
 
 # ---------------------------------------------------------------------------
 # lazarus status
 # ---------------------------------------------------------------------------
+
 
 @cli.command()
 def status():
@@ -90,6 +126,7 @@ def status():
 # ---------------------------------------------------------------------------
 # lazarus agent (sub-group)
 # ---------------------------------------------------------------------------
+
 
 @cli.group()
 def agent():
@@ -125,8 +162,11 @@ def agent_stop():
 # lazarus freeze
 # ---------------------------------------------------------------------------
 
+
 @cli.command()
-@click.option("--days", default=30, show_default=True, help="Number of days to extend deadline.")
+@click.option(
+    "--days", default=30, show_default=True, help="Number of days to extend deadline."
+)
 def freeze(days: int):
     """
     Panic button — extend the trigger deadline by N days.
@@ -144,6 +184,7 @@ def freeze(days: int):
 # ---------------------------------------------------------------------------
 # lazarus test-trigger
 # ---------------------------------------------------------------------------
+
 
 @cli.command("test-trigger")
 def test_trigger():
@@ -164,6 +205,7 @@ def test_trigger():
 # ---------------------------------------------------------------------------
 # lazarus update-secret
 # ---------------------------------------------------------------------------
+
 
 @cli.command("update-secret")
 @click.argument("new_secret_path", type=click.Path(exists=True))

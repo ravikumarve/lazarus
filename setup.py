@@ -1,10 +1,11 @@
-from setuptools import setup, find_packages
+from setuptools import setup
 
 setup(
     name="lazarus-protocol",
     version="0.1.0",
     description="Self-hosted dead man's switch for crypto holders",
-    packages=find_packages(),
+    packages=[],
+    py_modules=["lazarus"],
     python_requires=">=3.10",
     install_requires=[
         "cryptography>=41.0.0",
@@ -21,7 +22,7 @@ setup(
     ],
     entry_points={
         "console_scripts": [
-            "lazarus=lazarus.cli.main:cli",
+            "lazarus=cli.main:cli",
         ],
     },
 )
