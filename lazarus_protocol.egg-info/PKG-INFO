@@ -1,0 +1,19 @@
+Metadata-Version: 2.4
+Name: lazarus-protocol
+Version: 0.1.0
+Summary: Self-hosted dead man's switch for crypto holders
+Requires-Python: >=3.10
+Requires-Dist: cryptography>=41.0.0
+Requires-Dist: pycryptodome>=3.19.0
+Requires-Dist: click>=8.1.7
+Requires-Dist: rich>=13.6.0
+Requires-Dist: questionary>=2.0.1
+Requires-Dist: APScheduler>=3.10.4
+Requires-Dist: requests>=2.31.0
+Requires-Dist: sendgrid>=6.11.0
+Requires-Dist: python-telegram-bot>=20.6
+Requires-Dist: python-dotenv>=1.0.0
+Requires-Dist: pydantic>=2.4.0
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary

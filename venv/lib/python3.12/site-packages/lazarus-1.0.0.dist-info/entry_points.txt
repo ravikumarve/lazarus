@@ -1,0 +1,2 @@
+[console_scripts]
+lazarus = cli.main:cli
