@@ -1,0 +1,14 @@
+[Unit]
+Description=Lazarus Protocol Heartbeat Agent
+After=network.target
+
+[Service]
+Type=simple
+User=%i
+WorkingDirectory=/home/%i/Desktop/lazarus
+ExecStart=/usr/bin/python3 -m lazarus agent start
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
