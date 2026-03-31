@@ -1,3 +1,8 @@
 venv/
 __pycache__/
 *.egg-info/
+*.pyc
+.env
+Desktop/
+lazarus.egg-info/
+lazarus_protocol.egg-info/
