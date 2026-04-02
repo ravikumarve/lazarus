@@ -4,11 +4,24 @@ After=network.target
 
 [Service]
 Type=simple
+# Run as the user who installed the service
 User=%i
-WorkingDirectory=/home/%i/Desktop/lazarus
-ExecStart=/usr/bin/python3 -m lazarus agent start
+# Use absolute path to working directory
+WorkingDirectory=/home/matrix/Desktop/lazarus
+# Use the improved launcher script for proper Python path handling
+ExecStart=/usr/bin/python3 /home/matrix/Desktop/lazarus/run_lazarus.py agent start
+# Load environment variables from .env file
+EnvironmentFile=/home/matrix/Desktop/lazarus/.env
+# Standard output and error logging
+StandardOutput=journal
+StandardError=journal
+# Restart on failure with exponential backoff
 Restart=always
 RestartSec=10
+StartLimitIntervalSec=60
+StartLimitBurst=5
+# Process management
+# PIDFile=/tmp/lazarus.pid  # Removed - systemd manages PID automatically
 
 [Install]
 WantedBy=multi-user.target
