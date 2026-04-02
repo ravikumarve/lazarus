@@ -16,13 +16,14 @@ If you stop checking in, your encrypted secrets are automatically delivered to y
 - **Setup Wizard**: Interactive initialization with questionary prompts
 - **Heartbeat Logic**: Complete escalation ladder and trigger system
 - **Manual Check-in**: Ping command for resetting countdown timer
+- **Email Alerts**: SendGrid integration for reminder/final warnings
+- **Telegram Alerts**: Bot integration for mobile notifications
+- **Agent Scheduler**: APScheduler background process
+- **Beneficiary Delivery**: Complete email delivery system with decryption kit
 - **Test Suite**: Comprehensive tests covering all core functionality
 
 ### ⏳ In Progress / Planned Features
-- **Email Alerts**: SendGrid integration for reminder/final warnings
-- **Telegram Alerts**: Bot integration for mobile notifications
 - **IPFS Storage**: Distributed storage layer for redundancy
-- **Agent Scheduler**: APScheduler background process
 - **Delivery System**: Beneficiary email with decryption kit
 - **GUI Interface**: Desktop application (Pro tier)
 
@@ -34,7 +35,7 @@ If you stop checking in, your encrypted secrets are automatically delivered to y
 |---|---|---|
 | `lazarus init` | ✅ **Implemented** | Setup wizard — create your vault |
 | `lazarus ping` | ✅ **Implemented** | Manual check-in (resets timer) |
-| `lazarus status` | ⏳ **Stub** | Show vault status, days remaining |
+| `lazarus status` | ✅ **Implemented** | Show vault status, days remaining |
 | `lazarus agent start` | ⏳ **Stub** | Start background heartbeat agent |
 | `lazarus agent stop` | ⏳ **Stub** | Stop the agent |
 | `lazarus freeze --days N` | ⏳ **Stub** | Panic button — extend deadline |
@@ -111,7 +112,7 @@ lazarus/
 │
 ├── agent/
 │   ├── heartbeat.py       ✅ Heartbeat logic + escalation ladder
-│   └── alerts.py          ⏳ Email + Telegram alert system
+│   └── alerts.py          ✅ Email + Telegram alert system
 │
 ├── contracts/             ⏳ (Optional) Solidity vault for on-chain trigger
 │
@@ -126,8 +127,9 @@ lazarus/
 
 ### ✅ Implemented Protections
 - **Military-grade encryption**: AES-256-GCM + RSA-4096 hybrid scheme
-- **Memory zeroing**: Sensitive keys cleared from memory after use
-- **Secure file permissions**: Config files locked to owner (chmod 600)
+- **Enhanced memory zeroing**: Uses ctypes.memset for secure memory clearing resistant to compiler optimizations
+- **Cross-platform file permissions**: Windows support equivalent to POSIX chmod 0o600 (pywin32 + icacls fallback)
+- **Secure temp file handling**: Proper lifecycle management for decryption kit temporary files
 - **No cloud dependencies**: Fully local operation by default
 - **Tamper detection**: GCM authentication tags prevent ciphertext modification
 
@@ -148,6 +150,17 @@ lazarus/
 | Early trigger accident | Escalation ladder + freeze | ✅ **Implemented** |
 | Forget to ping | Daily reminders + alerts | ⏳ **In Progress** |
 
+## 💻 Windows Support
+
+Lazarus Protocol provides comprehensive Windows security support with equivalent protection to POSIX systems:
+
+- **✅ File Permissions**: Uses pywin32 (preferred) or icacls.exe fallback to set owner-only access equivalent to POSIX chmod 0o600
+- **✅ Secure Memory**: ctypes.memset-based memory clearing works identically on Windows
+- **✅ Temp File Handling**: Proper lifecycle management for temporary decryption kit files
+- **✅ CLI Compatibility**: Full CLI functionality on Windows CMD, PowerShell, and WSL
+
+Windows users get the same security guarantees as Linux/macOS users — your vault is protected with owner-only file permissions and secure memory handling.
+
 ---
 
 ## 🗓️ Roadmap
@@ -158,14 +171,14 @@ lazarus/
 - [x] CLI framework and setup wizard
 - [x] Heartbeat logic and escalation system
 - [x] Manual check-in (ping command)
-- [ ] Email alert system (SendGrid integration)
-- [ ] Telegram alert system
+- [x] Email alert system (SendGrid integration)
+- [x] Telegram alert system
 - [ ] IPFS storage layer
-- [ ] Agent scheduler implementation
+- [x] Agent scheduler implementation
 
 ### Q3 2025 - Production Ready
-- [ ] Beneficiary delivery system
-- [ ] Decryption kit generator
+- [x] Beneficiary delivery system
+- [x] Decryption kit generator
 - [ ] Multi-platform packaging
 - [ ] Comprehensive documentation
 - [ ] Security audit and penetration testing

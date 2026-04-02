@@ -15,11 +15,14 @@ Run with: python -m lazarus <command>
 """
 
 import math
+import time
 import click
 from rich.console import Console
+from rich.table import Table
+from rich import box
 
 from core.config import load_config, save_config, record_checkin, days_remaining
-from core.config import ConfigCorruptedError
+from core.config import ConfigCorruptedError, days_since_checkin, is_trigger_due
 
 console = Console()
 
@@ -113,14 +116,86 @@ def ping():
 def status():
     """
     Show vault status: armed state, days remaining, last check-in.
-
-    TODO:
-        1. Load config
-        2. Display table with Rich
     """
-    console.print("[bold]Lazarus Status[/bold]")
-    # TODO: implement
-    raise NotImplementedError
+    try:
+        config = load_config()
+
+        # Calculate status metrics
+        armed_state = "✅ Armed" if config.armed else "❌ Disarmed"
+        days_since_last_ping = days_since_checkin(config)
+        days_until_trigger = days_remaining(config)
+        trigger_due = is_trigger_due(config)
+
+        # Format last check-in timestamp
+        if config.last_checkin_timestamp:
+            last_checkin = time.strftime(
+                "%Y-%m-%d %H:%M:%S UTC", time.gmtime(config.last_checkin_timestamp)
+            )
+        else:
+            last_checkin = "Never"
+
+        # Create status table
+        table = Table(
+            box=box.ROUNDED, show_header=False, title="[bold]Lazarus Status[/bold]"
+        )
+        table.add_column("Field", style="cyan", justify="right")
+        table.add_column("Value", style="white")
+
+        # Add status rows
+        table.add_row("Armed State", armed_state)
+        table.add_row("Owner", f"{config.owner_name} <{config.owner_email}>")
+        table.add_row(
+            "Beneficiary", f"{config.beneficiary.name} <{config.beneficiary.email}>"
+        )
+        table.add_row("Check-in Interval", f"{config.checkin_interval_days} days")
+
+        # Handle days since last ping
+        if math.isinf(days_since_last_ping):
+            days_since_str = "Never checked in"
+        else:
+            days_since_str = f"{days_since_last_ping:.1f} days ago"
+        table.add_row("Days Since Last Ping", days_since_str)
+
+        # Handle days remaining with appropriate colors
+        if math.isinf(days_until_trigger) and days_until_trigger > 0:
+            days_remaining_str = "∞ days (never checked in)"
+            days_remaining_style = "yellow"
+        elif days_until_trigger > 0:
+            days_remaining_str = f"{days_until_trigger:.1f} days"
+            days_remaining_style = "green"
+        elif days_until_trigger == 0:
+            days_remaining_str = "Due now"
+            days_remaining_style = "red"
+        else:
+            days_remaining_str = f"{-days_until_trigger:.1f} days overdue"
+            days_remaining_style = "red bold"
+
+        table.add_row(
+            "Days Until Trigger", f"[{days_remaining_style}]{days_remaining_str}[/]"
+        )
+        table.add_row("Last Check-in", last_checkin)
+
+        # Add trigger status warning if due
+        if trigger_due:
+            table.add_row("⚠️  Status", "[red bold]TRIGGER DUE - VAULT WILL RELEASE[/]")
+        elif math.isinf(days_since_last_ping):
+            table.add_row(
+                "⚠️  Status", "[yellow]Never checked in - timer starts on first ping[/]"
+            )
+
+        console.print(table)
+
+    except FileNotFoundError:
+        console.print("[red]❌ Lazarus not initialized.[/red]")
+        console.print("Run: python -m lazarus init")
+        return
+    except ConfigCorruptedError as e:
+        console.print(f"[red]❌ Config file is corrupted: {e}[/red]")
+        console.print("Run: python -m lazarus init to recreate configuration")
+        return
+    except Exception as e:
+        console.print(f"[red]❌ Error loading status: {e}[/red]")
+        return
 
 
 # ---------------------------------------------------------------------------

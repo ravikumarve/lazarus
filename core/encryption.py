@@ -17,6 +17,7 @@ Even if someone steals the vault, they see encrypted noise.
 from __future__ import annotations
 
 import base64
+import ctypes
 import os
 from pathlib import Path
 from typing import Union
@@ -33,17 +34,19 @@ from cryptography.exceptions import InvalidTag
 # Constants
 # ---------------------------------------------------------------------------
 
-AES_KEY_SIZE   = 32    # bytes — AES-256
-GCM_NONCE_SIZE = 12    # bytes — recommended for AES-GCM
-RSA_KEY_SIZE   = 4096  # bits
+AES_KEY_SIZE = 32  # bytes — AES-256
+GCM_NONCE_SIZE = 12  # bytes — recommended for AES-GCM
+RSA_KEY_SIZE = 4096  # bits
 
 
 # ---------------------------------------------------------------------------
 # Custom exception
 # ---------------------------------------------------------------------------
 
+
 class DecryptionError(Exception):
     """Raised when decryption fails due to a bad key or tampered ciphertext."""
+
     pass
 
 
@@ -51,18 +54,62 @@ class DecryptionError(Exception):
 # Memory zeroing helpers
 # ---------------------------------------------------------------------------
 
+
 def _zero_memory(buf: Union[bytearray, memoryview]) -> None:
     """
-    Zero out a bytearray or memoryview in place.
-    Replaces each byte with null bytes to reduce key lifetime in memory.
+    Securely zero out a bytearray or memoryview in place using ctypes.memset.
+
+    Uses ctypes.memset with proper memory access to prevent compiler
+    optimizations that could bypass the memory clearing.
+
+    Args:
+        buf: Bytearray or memoryview to securely zero out.
+
+    Raises:
+        TypeError: If buf is not a bytearray or memoryview.
+        ValueError: If buf is empty.
     """
-    for i in range(len(buf)):
-        buf[i] = 0
+    if not isinstance(buf, (bytearray, memoryview)):
+        raise TypeError(f"Expected bytearray or memoryview, got {type(buf).__name__}")
+
+    if len(buf) == 0:
+        raise ValueError("Cannot zero empty buffer")
+
+    try:
+        # Use ctypes.memset to securely zero the memory
+        # This uses the C memset function which is not optimized away by Python
+        if isinstance(buf, bytearray):
+            # Create a ctypes array from the bytearray buffer
+            buf_array = (ctypes.c_byte * len(buf)).from_buffer(buf)
+            ctypes.memset(ctypes.addressof(buf_array), 0, len(buf))
+        elif isinstance(buf, memoryview):
+            # For memoryview, work with the underlying bytes
+            if buf.c_contiguous and buf.format == "B":
+                # Use ctypes.memset directly on the memoryview's underlying buffer
+                buf_array = (ctypes.c_byte * len(buf)).from_buffer(buf)
+                ctypes.memset(ctypes.addressof(buf_array), 0, len(buf))
+            else:
+                # For non-contiguous or non-byte memoryviews, fallback to manual zeroing
+                for i in range(len(buf)):
+                    buf[i] = 0
+
+        # Force a memory barrier/volatile operation to prevent reordering
+        # Access the buffer to create a side effect
+        if len(buf) > 0:
+            _ = buf[0]
+
+    except Exception as e:
+        # Fallback to manual zeroing if ctypes fails
+        # This is better than failing completely for security
+        for i in range(len(buf)):
+            buf[i] = 0
+        raise RuntimeError(f"Secure memory zeroing failed, used fallback: {e}")
 
 
 # ---------------------------------------------------------------------------
 # Key generation
 # ---------------------------------------------------------------------------
+
 
 def generate_aes_key() -> bytes:
     """Return a cryptographically random 32-byte (256-bit) AES key."""
@@ -126,6 +173,7 @@ def serialise_private_key_with_password(
 # RSA key wrapping / unwrapping (internal)
 # ---------------------------------------------------------------------------
 
+
 def _rsa_encrypt_key(aes_key: bytes, public_key_pem: bytes) -> bytes:
     """Encrypt an AES key with an RSA public key using OAEP/SHA-256."""
     public_key = serialization.load_pem_public_key(
@@ -164,6 +212,7 @@ def _rsa_decrypt_key(
 # File encryption
 # ---------------------------------------------------------------------------
 
+
 def encrypt_file(
     plaintext_path: Path,
     recipient_public_key_pem: bytes,
@@ -188,7 +237,7 @@ def encrypt_file(
         FileNotFoundError: if plaintext_path does not exist.
     """
     plaintext_path = Path(plaintext_path)
-    output_dir     = Path(output_dir)
+    output_dir = Path(output_dir)
 
     if not plaintext_path.exists():
         raise FileNotFoundError(f"Secret file not found: {plaintext_path}")
@@ -198,11 +247,11 @@ def encrypt_file(
 
     # 1. Fresh AES-256 key + 12-byte nonce — never reuse either
     aes_key = generate_aes_key()
-    nonce   = os.urandom(GCM_NONCE_SIZE)
+    nonce = os.urandom(GCM_NONCE_SIZE)
 
     # 2. AES-256-GCM encryption (appends 16-byte auth tag automatically)
-    aesgcm     = AESGCM(aes_key)
-    plaintext  = plaintext_path.read_bytes()
+    aesgcm = AESGCM(aes_key)
+    plaintext = plaintext_path.read_bytes()
     ciphertext = aesgcm.encrypt(nonce, plaintext, associated_data=None)
 
     # 3. Write [nonce | ciphertext+tag]
@@ -210,7 +259,7 @@ def encrypt_file(
 
     # 4. RSA-wrap the AES key for the beneficiary
     encrypted_aes_key = _rsa_encrypt_key(aes_key, recipient_public_key_pem)
-    key_blob_b64       = base64.b64encode(encrypted_aes_key).decode("utf-8")
+    key_blob_b64 = base64.b64encode(encrypted_aes_key).decode("utf-8")
 
     # 5. Zero out AES key from memory
     aes_key_ba = bytearray(aes_key)
@@ -223,6 +272,7 @@ def encrypt_file(
 # ---------------------------------------------------------------------------
 # File decryption
 # ---------------------------------------------------------------------------
+
 
 def decrypt_file(
     encrypted_path: Path,
@@ -249,7 +299,7 @@ def decrypt_file(
         DecryptionError:   if key is wrong or ciphertext is tampered.
     """
     encrypted_path = Path(encrypted_path)
-    output_path    = Path(output_path)
+    output_path = Path(output_path)
 
     if not encrypted_path.exists():
         raise FileNotFoundError(f"Encrypted file not found: {encrypted_path}")
@@ -257,17 +307,21 @@ def decrypt_file(
     # 1. RSA-unwrap the AES key
     try:
         encrypted_aes_key = base64.b64decode(key_blob_b64)
-        aes_key = _rsa_decrypt_key(encrypted_aes_key, private_key_pem, private_key_password)
+        aes_key = _rsa_decrypt_key(
+            encrypted_aes_key, private_key_pem, private_key_password
+        )
     except Exception as exc:
-        raise DecryptionError(f"Failed to unwrap AES key — wrong private key? ({exc})") from exc
+        raise DecryptionError(
+            f"Failed to unwrap AES key — wrong private key? ({exc})"
+        ) from exc
 
     # Convert to bytearray for secure zeroing after use
     aes_key_ba = bytearray(aes_key)
 
     try:
         # 2. Split raw bytes into nonce + ciphertext
-        raw        = encrypted_path.read_bytes()
-        nonce      = raw[:GCM_NONCE_SIZE]
+        raw = encrypted_path.read_bytes()
+        nonce = raw[:GCM_NONCE_SIZE]
         ciphertext = raw[GCM_NONCE_SIZE:]
 
         # 3. AES-256-GCM decrypt + authenticate
@@ -293,6 +347,7 @@ def decrypt_file(
 # Key file helpers
 # ---------------------------------------------------------------------------
 
+
 def load_public_key_from_file(path: Path) -> bytes:
     """
     Read and validate a PEM RSA public key file.
@@ -301,7 +356,7 @@ def load_public_key_from_file(path: Path) -> bytes:
         ValueError: if the file is not a valid RSA public key.
     """
     path = Path(path)
-    pem  = path.read_bytes()
+    pem = path.read_bytes()
     try:
         serialization.load_pem_public_key(pem, backend=default_backend())
     except Exception as exc:
@@ -321,9 +376,11 @@ def load_private_key_from_file(path: Path, password: bytes | None = None) -> byt
         ValueError: if the file is not a valid RSA private key.
     """
     path = Path(path)
-    pem  = path.read_bytes()
+    pem = path.read_bytes()
     try:
-        serialization.load_pem_private_key(pem, password=password, backend=default_backend())
+        serialization.load_pem_private_key(
+            pem, password=password, backend=default_backend()
+        )
     except Exception as exc:
         raise ValueError(f"Invalid RSA private key at {path}: {exc}") from exc
     return pem

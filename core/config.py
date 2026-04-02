@@ -21,6 +21,7 @@ Design decisions:
 from __future__ import annotations
 
 import json
+import logging
 import math
 import os
 import stat
@@ -42,39 +43,44 @@ CONFIG_PATH = LAZARUS_DIR / "config.json"
 # Data models
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class BeneficiaryConfig:
     """Details of the person who receives the secrets if the switch fires."""
+
     name: str
     email: str
-    public_key_path: str   # Absolute path to RSA-4096 public key PEM on disk
+    public_key_path: str  # Absolute path to RSA-4096 public key PEM on disk
 
 
 @dataclass
 class VaultConfig:
     """Metadata about the encrypted secret payload."""
-    secret_file_path: str          # Original plaintext path (for reference/re-encryption)
-    encrypted_file_path: str       # Path to encrypted_secrets.bin
-    key_blob: str                  # base64(RSA-encrypted AES key) — never log this
-    ipfs_cid: Optional[str] = None # IPFS CID if the file was uploaded to IPFS
+
+    secret_file_path: str  # Original plaintext path (for reference/re-encryption)
+    encrypted_file_path: str  # Path to encrypted_secrets.bin
+    key_blob: str  # base64(RSA-encrypted AES key) — never log this
+    ipfs_cid: Optional[str] = None  # IPFS CID if the file was uploaded to IPFS
 
 
 @dataclass
 class LazarusConfig:
     """Root configuration object. Serialised to ~/.lazarus/config.json."""
+
     owner_name: str
     owner_email: str
     beneficiary: BeneficiaryConfig
     vault: VaultConfig
-    checkin_interval_days: int     = 30
-    last_checkin_timestamp: Optional[float] = None   # UTC epoch float
+    checkin_interval_days: int = 30
+    last_checkin_timestamp: Optional[float] = None  # UTC epoch float
     telegram_chat_id: Optional[str] = None
-    armed: bool                    = True
+    armed: bool = True
 
 
 # ---------------------------------------------------------------------------
 # Serialisation helpers
 # ---------------------------------------------------------------------------
+
 
 def _config_to_dict(config: LazarusConfig) -> dict:
     """Convert a LazarusConfig (with nested dataclasses) to a plain dict."""
@@ -90,28 +96,29 @@ def _config_from_dict(d: dict) -> LazarusConfig:
     beneficiary = BeneficiaryConfig(**d["beneficiary"])
 
     vault_d = d["vault"]
-    vault   = VaultConfig(
-        secret_file_path    = vault_d["secret_file_path"],
-        encrypted_file_path = vault_d["encrypted_file_path"],
-        key_blob            = vault_d["key_blob"],
-        ipfs_cid            = vault_d.get("ipfs_cid"),
+    vault = VaultConfig(
+        secret_file_path=vault_d["secret_file_path"],
+        encrypted_file_path=vault_d["encrypted_file_path"],
+        key_blob=vault_d["key_blob"],
+        ipfs_cid=vault_d.get("ipfs_cid"),
     )
 
     return LazarusConfig(
-        owner_name              = d["owner_name"],
-        owner_email             = d["owner_email"],
-        beneficiary             = beneficiary,
-        vault                   = vault,
-        checkin_interval_days   = d.get("checkin_interval_days", 30),
-        last_checkin_timestamp  = d.get("last_checkin_timestamp"),
-        telegram_chat_id        = d.get("telegram_chat_id"),
-        armed                   = d.get("armed", True),
+        owner_name=d["owner_name"],
+        owner_email=d["owner_email"],
+        beneficiary=beneficiary,
+        vault=vault,
+        checkin_interval_days=d.get("checkin_interval_days", 30),
+        last_checkin_timestamp=d.get("last_checkin_timestamp"),
+        telegram_chat_id=d.get("telegram_chat_id"),
+        armed=d.get("armed", True),
     )
 
 
 # ---------------------------------------------------------------------------
 # Load / Save
 # ---------------------------------------------------------------------------
+
 
 def load_config(config_path: Path = CONFIG_PATH) -> LazarusConfig:
     """
@@ -131,13 +138,12 @@ def load_config(config_path: Path = CONFIG_PATH) -> LazarusConfig:
 
     if not config_path.exists():
         raise FileNotFoundError(
-            f"Lazarus config not found at {config_path}.\n"
-            "Run: python -m lazarus init"
+            f"Lazarus config not found at {config_path}.\nRun: python -m lazarus init"
         )
 
     try:
         raw = config_path.read_text(encoding="utf-8")
-        d   = json.loads(raw)
+        d = json.loads(raw)
     except json.JSONDecodeError as exc:
         raise ConfigCorruptedError(
             f"Config file is not valid JSON: {config_path}\n{exc}"
@@ -158,7 +164,8 @@ def save_config(config: LazarusConfig, config_path: Path = CONFIG_PATH) -> None:
 
     - Creates ~/.lazarus/ if it doesn't exist.
     - Writes atomically: to a .tmp file, then renames (avoids partial writes).
-    - Sets file permissions to 600 (owner read/write only) on POSIX systems.
+    - Sets file permissions to 600 (owner read/write only) on all platforms.
+      On Windows: uses pywin32 (preferred) or icacls.exe with proper fallbacks.
 
     Args:
         config:      The LazarusConfig to persist.
@@ -179,10 +186,216 @@ def save_config(config: LazarusConfig, config_path: Path = CONFIG_PATH) -> None:
         tmp_path.unlink(missing_ok=True)
         raise
 
-    # Lock down permissions on POSIX (Linux / macOS)
-    # Windows file permissions not enforced — POSIX only
-    if os.name == "posix":
-        os.chmod(config_path, stat.S_IRUSR | stat.S_IWUSR)  # 0o600
+    # Lock down file permissions securely on all platforms
+    _secure_file_permissions(config_path)
+
+
+def _secure_file_permissions(file_path: Path) -> None:
+    """
+    Set secure file permissions equivalent to chmod 0o600 (read/write for owner only).
+
+    On POSIX systems: uses os.chmod() with 0o600 permissions.
+    On Windows systems: attempts to use pywin32 for robust permissions control,
+    falls back to icacls.exe if pywin32 is not available, and provides basic
+    protection if both methods fail.
+
+    Args:
+        file_path: Path to the file to secure
+    """
+    import platform
+    import subprocess
+    import logging
+
+    # Set up logging for this module
+    logger = logging.getLogger(__name__)
+
+    # Check if file exists before attempting to set permissions
+    if not file_path.exists():
+        logger.warning(f"Cannot set permissions: file does not exist: {file_path}")
+        return
+
+    if platform.system() == "Windows":
+        _secure_windows_file_permissions(file_path, logger)
+    else:
+        # POSIX systems (Linux, macOS): use standard chmod
+        try:
+            os.chmod(file_path, stat.S_IRUSR | stat.S_IWUSR)  # 0o600
+            logger.debug(f"POSIX file permissions set to 0o600: {file_path}")
+        except OSError as e:
+            logger.warning(f"Could not set POSIX file permissions: {e}")
+
+
+def _secure_windows_file_permissions(file_path: Path, logger: logging.Logger) -> None:
+    """
+    Set Windows file permissions equivalent to POSIX 0o600 (read/write for owner only).
+
+    Attempts methods in order:
+    1. pywin32 (most robust)
+    2. icacls.exe (built-in Windows tool)
+    3. Basic file protection (hidden attribute)
+
+    Args:
+        file_path: Path to the file to secure
+        logger: Logger instance for reporting
+    """
+    # Try pywin32 first (most robust method)
+    if _try_pywin32_permissions(file_path, logger):
+        return
+
+    # Fallback to icacls.exe
+    if _try_icacls_permissions(file_path, logger):
+        return
+
+    # Final fallback: basic protection
+    _set_basic_windows_protection(file_path, logger)
+
+
+def _try_pywin32_permissions(file_path: Path, logger: logging.Logger) -> bool:
+    """
+    Attempt to set Windows permissions using pywin32.
+
+    Returns:
+        True if successful, False if pywin32 is not available or fails
+    """
+    try:
+        import win32security
+        import win32api
+        import win32con
+
+        # Get the file handle
+        file_handle = win32security.CreateFile(
+            str(file_path),
+            win32con.GENERIC_READ | win32con.GENERIC_WRITE,
+            win32con.FILE_SHARE_READ,
+            None,
+            win32con.OPEN_EXISTING,
+            win32con.FILE_ATTRIBUTE_NORMAL,
+            None,
+        )
+
+        try:
+            # Get current user's SID
+            user_sid = win32security.LookupAccountName(None, win32api.GetUserName())[0]
+
+            # Create a security descriptor
+            sd = win32security.SECURITY_DESCRIPTOR()
+            sd.Initialize()
+
+            # Set DACL (Discretionary Access Control List)
+            # Create an ACL that grants full control to owner only
+            acl = win32security.ACL()
+            acl.Initialize()
+
+            # Add ACE for owner (full control)
+            acl.AddAccessAllowedAce(
+                win32security.ACL_REVISION, win32con.FILE_ALL_ACCESS, user_sid
+            )
+
+            # Set the DACL in the security descriptor
+            sd.SetSecurityDescriptorDacl(1, acl, 0)
+
+            # Set the owner in the security descriptor
+            sd.SetSecurityDescriptorOwner(user_sid, 0)
+
+            # Apply the security descriptor to the file
+            win32security.SetFileSecurity(
+                str(file_path),
+                win32security.DACL_SECURITY_INFORMATION
+                | win32security.OWNER_SECURITY_INFORMATION,
+                sd,
+            )
+
+            logger.debug(
+                f"Windows file permissions set successfully using pywin32: {file_path}"
+            )
+            return True
+
+        finally:
+            win32api.CloseHandle(file_handle)
+
+    except ImportError:
+        # pywin32 not installed
+        logger.debug("pywin32 not available - falling back to icacls")
+        return False
+
+    except Exception as e:
+        logger.warning(f"Failed to set Windows permissions using pywin32: {e}")
+        return False
+
+
+def _try_icacls_permissions(file_path: Path, logger: logging.Logger) -> bool:
+    """
+    Attempt to set Windows permissions using icacls.exe.
+
+    Returns:
+        True if successful, False if icacls fails or is not available
+    """
+    import subprocess
+
+    try:
+        # Get current username - try multiple methods for robustness
+        username = None
+        try:
+            username = os.getlogin()
+        except (OSError, AttributeError):
+            try:
+                username = os.environ.get("USERNAME") or os.environ.get("USER")
+            except:
+                username = "CURRENT_USER"  # Fallback
+
+        # Build icacls command to set owner-only permissions
+        # This removes inheritance and grants read/write to current user only
+        cmd = [
+            "icacls",
+            str(file_path),
+            "/inheritance:r",  # Remove inherited permissions
+            f"/grant:r {username}:(R,W)",  # Grant read/write to current user
+            "/remove: Everyone",  # Remove Everyone group
+            "/remove: Users",  # Remove Users group
+            "/remove: Authenticated Users",  # Remove Authenticated Users
+        ]
+
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        logger.debug(
+            f"Windows file permissions set successfully using icacls: {file_path}"
+        )
+        return True
+
+    except subprocess.CalledProcessError as e:
+        # icacls failed - log warning but continue
+        logger.warning(
+            f"Could not set Windows file permissions via icacls: {e}"
+            f"Stdout: {e.stdout if e.stdout else 'None'}"
+            f"Stderr: {e.stderr if e.stderr else 'None'}"
+            "Falling back to basic file protection."
+        )
+        return False
+    except FileNotFoundError:
+        # icacls not available
+        logger.warning(
+            "icacls.exe not available - cannot set Windows file permissions. "
+            "Consider installing Windows Support Tools or using pywin32."
+        )
+        return False
+    except Exception as e:
+        # Other unexpected errors
+        logger.warning(f"Unexpected error setting Windows permissions with icacls: {e}")
+        return False
+
+
+def _set_basic_windows_protection(file_path: Path, logger: logging.Logger) -> None:
+    """
+    Set basic Windows protection when advanced methods fail.
+    This includes setting hidden attribute and basic file permissions.
+    """
+    import subprocess
+
+    try:
+        # Set hidden attribute
+        subprocess.run(["attrib", "+H", str(file_path)], check=False)
+        logger.debug(f"Set hidden attribute as basic protection: {file_path}")
+    except:
+        logger.warning(f"Could not set hidden attribute for: {file_path}")
 
 
 def config_exists(config_path: Path = CONFIG_PATH) -> bool:
@@ -193,6 +406,7 @@ def config_exists(config_path: Path = CONFIG_PATH) -> bool:
 # ---------------------------------------------------------------------------
 # Check-in helpers
 # ---------------------------------------------------------------------------
+
 
 def record_checkin(config: LazarusConfig) -> LazarusConfig:
     """
@@ -205,6 +419,7 @@ def record_checkin(config: LazarusConfig) -> LazarusConfig:
         A new LazarusConfig with last_checkin_timestamp updated.
     """
     from dataclasses import replace
+
     return replace(config, last_checkin_timestamp=time.time())
 
 
@@ -251,6 +466,7 @@ def disarm(config: LazarusConfig) -> LazarusConfig:
     Returns updated config — caller must save_config().
     """
     from dataclasses import replace
+
     return replace(config, armed=False)
 
 
@@ -269,12 +485,16 @@ def extend_deadline(config: LazarusConfig, extra_days: int) -> LazarusConfig:
     Returns updated config — caller must save_config().
     """
     from dataclasses import replace
-    return replace(config, checkin_interval_days=config.checkin_interval_days + extra_days)
+
+    return replace(
+        config, checkin_interval_days=config.checkin_interval_days + extra_days
+    )
 
 
 # ---------------------------------------------------------------------------
 # Validation
 # ---------------------------------------------------------------------------
+
 
 def validate_config(config: LazarusConfig) -> list[str]:
     """
@@ -305,7 +525,9 @@ def validate_config(config: LazarusConfig) -> list[str]:
         errors.append("vault.key_blob is empty — vault cannot be decrypted")
 
     if config.checkin_interval_days < 1:
-        errors.append(f"checkin_interval_days must be >= 1, got {config.checkin_interval_days}")
+        errors.append(
+            f"checkin_interval_days must be >= 1, got {config.checkin_interval_days}"
+        )
 
     return errors
 
@@ -314,6 +536,8 @@ def validate_config(config: LazarusConfig) -> list[str]:
 # Custom exceptions
 # ---------------------------------------------------------------------------
 
+
 class ConfigCorruptedError(Exception):
     """Raised when the config file exists but cannot be parsed or is missing fields."""
+
     pass

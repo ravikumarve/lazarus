@@ -35,14 +35,17 @@ logger = logging.getLogger(__name__)
 # Custom exception
 # ---------------------------------------------------------------------------
 
+
 class AlertError(Exception):
     """Raised when an alert cannot be delivered."""
+
     pass
 
 
 # ---------------------------------------------------------------------------
 # Owner alerts — email
 # ---------------------------------------------------------------------------
+
 
 def send_reminder_email(owner_email: str, days_remaining: float) -> None:
     """
@@ -56,8 +59,8 @@ def send_reminder_email(owner_email: str, days_remaining: float) -> None:
         AlertError: if SendGrid is not configured or delivery fails.
     """
     days_int = max(0, int(days_remaining))
-    subject  = f"⚰️ Lazarus: {days_int} day{'s' if days_int != 1 else ''} remaining — check in now"
-    body     = _reminder_email_body(days_int)
+    subject = f"⚰️ Lazarus: {days_int} day{'s' if days_int != 1 else ''} remaining — check in now"
+    body = _reminder_email_body(days_int)
 
     _send_email(
         to_email=owner_email,
@@ -87,12 +90,14 @@ def send_final_warning(
     """
     hours = max(0, int(days_remaining * 24))
     subject = f"⚰️ LAZARUS FINAL WARNING — triggering in ~{hours} hours"
-    body    = _final_warning_body(hours)
+    body = _final_warning_body(hours)
 
     email_ok = True
     try:
         _send_email(to_email=owner_email, subject=subject, html_body=body)
-        logger.warning("Final warning email sent to %s (~%dh remaining)", owner_email, hours)
+        logger.warning(
+            "Final warning email sent to %s (~%dh remaining)", owner_email, hours
+        )
     except AlertError as exc:
         logger.error("Final warning email failed: %s", exc)
         email_ok = False
@@ -119,6 +124,7 @@ def send_final_warning(
 # Owner alerts — Telegram
 # ---------------------------------------------------------------------------
 
+
 def send_telegram_alert(chat_id: str, days_remaining: float) -> None:
     """
     Send a Telegram reminder to the owner.
@@ -131,18 +137,21 @@ def send_telegram_alert(chat_id: str, days_remaining: float) -> None:
         AlertError: if Telegram is not configured or delivery fails.
     """
     days_int = max(0, int(days_remaining))
-    message  = (
+    message = (
         f"⚰️ *Lazarus reminder*\n"
         f"*{days_int} day{'s' if days_int != 1 else ''}* until your dead man's switch triggers.\n\n"
         f"Run `lazarus ping` to reset the countdown."
     )
     _send_telegram(chat_id=chat_id, message=message)
-    logger.info("Telegram reminder sent to chat %s (%d days remaining)", chat_id, days_int)
+    logger.info(
+        "Telegram reminder sent to chat %s (%d days remaining)", chat_id, days_int
+    )
 
 
 # ---------------------------------------------------------------------------
 # Beneficiary delivery email
 # ---------------------------------------------------------------------------
+
 
 def send_delivery_email(
     beneficiary_name: str,
@@ -175,44 +184,53 @@ def send_delivery_email(
     if not encrypted_file_path.exists():
         raise FileNotFoundError(f"Encrypted vault not found: {encrypted_file_path}")
 
-    # Build the standalone decryption kit zip
-    kit_path = _build_decryption_kit(
-        key_blob_b64=key_blob_b64,
-        owner_name=owner_name,
-    )
+    kit_path = None
+    try:
+        # Build the standalone decryption kit zip
+        kit_path = _build_decryption_kit(
+            key_blob_b64=key_blob_b64,
+            owner_name=owner_name,
+        )
 
-    subject = f"[Lazarus] You have received an inheritance from {owner_name}"
-    body    = _delivery_email_body(
-        beneficiary_name=beneficiary_name,
-        owner_name=owner_name,
-        ipfs_cid=ipfs_cid,
-    )
+        subject = f"[Lazarus] You have received an inheritance from {owner_name}"
+        body = _delivery_email_body(
+            beneficiary_name=beneficiary_name,
+            owner_name=owner_name,
+            ipfs_cid=ipfs_cid,
+        )
 
-    attachments = [
-        (encrypted_file_path, "encrypted_secrets.bin", "application/octet-stream"),
-        (kit_path,            "decryption_kit.zip",    "application/zip"),
-    ]
+        attachments = [
+            (encrypted_file_path, "encrypted_secrets.bin", "application/octet-stream"),
+            (kit_path, "decryption_kit.zip", "application/zip"),
+        ]
 
-    _send_email(
-        to_email=beneficiary_email,
-        subject=subject,
-        html_body=body,
-        attachments=attachments,
-    )
+        _send_email(
+            to_email=beneficiary_email,
+            subject=subject,
+            html_body=body,
+            attachments=attachments,
+        )
 
-    logger.critical(
-        "DELIVERY EMAIL SENT to %s (%s) for %s",
-        beneficiary_name, beneficiary_email, owner_name,
-    )
+        logger.critical(
+            "DELIVERY EMAIL SENT to %s (%s) for %s",
+            beneficiary_name,
+            beneficiary_email,
+            owner_name,
+        )
+    finally:
+        # Clean up temporary decryption kit after email is sent
+        if kit_path:
+            _cleanup_decryption_kit(kit_path)
 
 
 # ---------------------------------------------------------------------------
 # Decryption kit builder
 # ---------------------------------------------------------------------------
 
+
 def _build_decryption_kit(key_blob_b64: str, owner_name: str) -> Path:
     """
-    Build decryption_kit.zip in a temp directory.
+    Build decryption_kit.zip in a persistent temporary location.
 
     Contents:
         decrypt.py        — standalone script requiring only 'cryptography' pip package
@@ -221,29 +239,57 @@ def _build_decryption_kit(key_blob_b64: str, owner_name: str) -> Path:
 
     Returns:
         Path to the zip file (in system temp dir).
+        Caller is responsible for cleanup via _cleanup_decryption_kit().
 
     Note:
-        The temp directory is cleaned up in a finally block to prevent
-        key_blob.txt from persisting on disk if zip creation fails.
+        The temp file is created with secure permissions and will persist
+        until explicitly cleaned up to prevent race conditions with email attachments.
     """
     import tempfile
 
-    tmp_dir  = Path(tempfile.mkdtemp(prefix="lazarus_kit_"))
-    zip_path = tmp_dir / "decryption_kit.zip"
+    # Create a persistent temporary file that won't be automatically deleted
+    temp_fd, temp_path = tempfile.mkstemp(suffix=".zip", prefix="lazarus_kit_")
+    os.close(temp_fd)  # Close the file descriptor since we'll use zipfile
+    zip_path = Path(temp_path)
 
     try:
-        decrypt_script   = _standalone_decrypt_script()
+        decrypt_script = _standalone_decrypt_script()
         instructions_txt = _instructions_text(owner_name)
 
         with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-            zf.writestr("decrypt.py",        decrypt_script)
-            zf.writestr("key_blob.txt",      key_blob_b64)
-            zf.writestr("INSTRUCTIONS.txt",  instructions_txt)
-    finally:
-        shutil.rmtree(tmp_dir, ignore_errors=True)
+            zf.writestr("decrypt.py", decrypt_script)
+            zf.writestr("key_blob.txt", key_blob_b64)
+            zf.writestr("INSTRUCTIONS.txt", instructions_txt)
 
-    logger.debug("Decryption kit built at %s", zip_path)
-    return zip_path
+        # Set secure permissions on the temp file
+        os.chmod(zip_path, 0o600)  # Read/write for owner only
+
+        logger.debug("Decryption kit built at %s", zip_path)
+        return zip_path
+    except Exception:
+        # Clean up on any error during creation
+        try:
+            zip_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise
+
+
+def _cleanup_decryption_kit(kit_path: Path) -> None:
+    """
+    Clean up decryption kit temporary file.
+
+    Args:
+        kit_path: Path to the decryption kit zip file to clean up.
+
+    Note:
+        Safe to call multiple times - ignores missing files.
+    """
+    try:
+        kit_path.unlink(missing_ok=True)
+        logger.debug("Cleaned up decryption kit: %s", kit_path)
+    except OSError as exc:
+        logger.warning("Failed to clean up decryption kit %s: %s", kit_path, exc)
 
 
 def _standalone_decrypt_script() -> str:
@@ -486,6 +532,7 @@ def _instructions_text(owner_name: str) -> str:
 # Email / Telegram transport layer
 # ---------------------------------------------------------------------------
 
+
 def _send_email(
     to_email: str,
     subject: str,
@@ -507,13 +554,19 @@ def _send_email(
     try:
         import sendgrid
         from sendgrid.helpers.mail import (
-            Mail, Attachment, FileContent, FileName,
-            FileType, Disposition,
+            Mail,
+            Attachment,
+            FileContent,
+            FileName,
+            FileType,
+            Disposition,
         )
     except ImportError as exc:
-        raise AlertError("sendgrid package not installed. Run: pip install sendgrid") from exc
+        raise AlertError(
+            "sendgrid package not installed. Run: pip install sendgrid"
+        ) from exc
 
-    api_key   = os.getenv("SENDGRID_API_KEY")
+    api_key = os.getenv("SENDGRID_API_KEY")
     from_addr = os.getenv("ALERT_FROM_EMAIL")
 
     if not api_key:
@@ -530,9 +583,9 @@ def _send_email(
 
     if attachments:
         for file_path, filename, mime_type in attachments:
-            data     = Path(file_path).read_bytes()
-            encoded  = base64.b64encode(data).decode()
-            att      = Attachment(
+            data = Path(file_path).read_bytes()
+            encoded = base64.b64encode(data).decode()
+            att = Attachment(
                 FileContent(encoded),
                 FileName(filename),
                 FileType(mime_type),
@@ -541,7 +594,7 @@ def _send_email(
             message.add_attachment(att)
 
     try:
-        client   = sendgrid.SendGridAPIClient(api_key=api_key)
+        client = sendgrid.SendGridAPIClient(api_key=api_key)
         response = client.send(message)
         if response.status_code not in (200, 202):
             raise AlertError(
@@ -594,12 +647,13 @@ def _send_telegram(chat_id: str, message: str) -> None:
 # Email body builders
 # ---------------------------------------------------------------------------
 
+
 def _reminder_email_body(days_remaining: int) -> str:
     urgency = "⚠️" if days_remaining <= 5 else "🔔"
     return f"""
     <html><body style="font-family: monospace; background:#111; color:#eee; padding:32px;">
       <h2 style="color:#e74c3c;">⚰️ Lazarus Protocol</h2>
-      <p>{urgency} Your dead man's switch will trigger in <strong>{days_remaining} day{'s' if days_remaining != 1 else ''}</strong>.</p>
+      <p>{urgency} Your dead man's switch will trigger in <strong>{days_remaining} day{"s" if days_remaining != 1 else ""}</strong>.</p>
       <p>If you are alive and well, check in now:</p>
       <pre style="background:#222; padding:12px; border-radius:4px; color:#2ecc71;">python -m lazarus ping</pre>
       <p>To extend the deadline by 30 days:</p>
@@ -675,6 +729,7 @@ def _delivery_email_body(
 # ---------------------------------------------------------------------------
 # Configuration checks
 # ---------------------------------------------------------------------------
+
 
 def email_configured() -> bool:
     """Return True if SendGrid credentials are present in the environment."""
