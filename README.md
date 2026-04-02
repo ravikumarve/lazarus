@@ -15,7 +15,7 @@ If you stop checking in, your encrypted secrets are automatically delivered to y
 - **CLI Framework**: Click-based command structure with Rich output
 - **Setup Wizard**: Interactive initialization with questionary prompts
 - **Heartbeat Logic**: Complete escalation ladder and trigger system
-- **Manual Check-in**: Ping command for resetting countdown timer (implementation in progress)
+- **Manual Check-in**: Ping command for resetting countdown timer
 - **Email Alerts**: SendGrid integration for reminder/final warnings
 - **Telegram Alerts**: Bot integration for mobile notifications
 - **Agent Scheduler**: APScheduler background process
@@ -34,7 +34,7 @@ If you stop checking in, your encrypted secrets are automatically delivered to y
 | Command | Status | Description |
 |---|---|---|
 | `lazarus init` | ✅ **Implemented** | Setup wizard — create your vault |
-| `lazarus ping` | ⏳ **Stub** | Manual check-in (resets timer) |
+| `lazarus ping` | ✅ **Implemented** | Manual check-in (resets timer) |
 | `lazarus status` | ✅ **Implemented** | Show vault status, days remaining |
 | `lazarus agent start` | ✅ **Implemented** | Start background heartbeat agent |
 | `lazarus agent stop` | ✅ **Implemented** | Stop the agent |
@@ -305,7 +305,7 @@ systemctl --user start lazarus
 - [x] Configuration system with secure storage
 - [x] CLI framework and setup wizard
 - [x] Heartbeat logic and escalation system
-- [ ] Manual check-in (ping command)
+- [x] Manual check-in (ping command)
 - [x] Email alert system (SendGrid integration)
 - [x] Telegram alert system
 - [ ] IPFS storage layer
@@ -363,8 +363,8 @@ python -m pytest tests/test_encryption.py -v
 
 **Test ping functionality:**
 ```bash
-# TODO: ping command not yet implemented
-# python -m lazarus ping
+# Test the ping command
+python -m lazarus ping
 ```
 
 **Permission errors:**
