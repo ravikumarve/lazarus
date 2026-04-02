@@ -46,6 +46,7 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 
+
 def _sanitize_config_for_logging(config) -> dict:
     """
     Return a sanitized dict of the config for logging.
@@ -70,24 +71,43 @@ def _sanitize_config_for_logging(config) -> dict:
 
 
 # Module-level imports so unittest.mock.patch() can intercept them in tests
-from lazarus.core.config import (
-    load_config, save_config, config_exists,
-    days_since_checkin, days_remaining, is_trigger_due,
-    disarm, CONFIG_PATH,
+from core.config import (
+    load_config,
+    save_config,
+    config_exists,
+    days_since_checkin,
+    days_remaining,
+    is_trigger_due,
+    disarm,
+    CONFIG_PATH,
 )
-from lazarus.agent.alerts import (
-    send_reminder_email, send_telegram_alert, send_final_warning,
-    send_delivery_email, email_configured, telegram_configured, AlertError,
+from agent.alerts import (
+    send_reminder_email,
+    send_telegram_alert,
+    send_final_warning,
+    send_delivery_email,
+    email_configured,
+    telegram_configured,
+    AlertError,
+)
+from .alerts import (
+    send_reminder_email,
+    send_telegram_alert,
+    send_final_warning,
+    send_delivery_email,
+    email_configured,
+    telegram_configured,
+    AlertError,
 )
 
 # Escalation thresholds — days without a check-in
-REMINDER_DAY   = 20
-TELEGRAM_DAY   = 25
+REMINDER_DAY = 20
+TELEGRAM_DAY = 25
 FINAL_WARN_DAY = 28
 
 # Heartbeat fires every hour so alerts are prompt (not up to 24h late)
 HEARTBEAT_INTERVAL_HOURS = 1
-WATCHDOG_INTERVAL_HOURS  = 6
+WATCHDOG_INTERVAL_HOURS = 6
 
 # Module-level scheduler instance (one per process)
 _scheduler = None
@@ -122,16 +142,18 @@ def _remove_pid_file() -> None:
 # Alert deduplication state
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class _AlertState:
     """
     Tracks which alerts have already been sent for the current countdown.
     Reset whenever days_since_checkin drops below a threshold (owner pinged in).
     """
-    reminder_sent:    bool = False
-    telegram_sent:    bool = False
-    final_warn_sent:  bool = False
-    triggered:        bool = False
+
+    reminder_sent: bool = False
+    telegram_sent: bool = False
+    final_warn_sent: bool = False
+    triggered: bool = False
 
 
 _alert_state = _AlertState()
@@ -140,6 +162,7 @@ _alert_state = _AlertState()
 # ---------------------------------------------------------------------------
 # Agent lifecycle
 # ---------------------------------------------------------------------------
+
 
 def start_agent(config_path: Optional[Path] = None) -> None:
     """
@@ -159,14 +182,14 @@ def start_agent(config_path: Optional[Path] = None) -> None:
         logger.error("APScheduler not installed. Run: pip install APScheduler")
         raise
 
-    from lazarus.core.config import load_config, config_exists, CONFIG_PATH
+    from core.config import load_config, config_exists, CONFIG_PATH
 
     check_path = Path(config_path) if config_path else CONFIG_PATH
     _agent_config_path = check_path  # Store for watchdog recovery
 
     if not config_exists(check_path):
         logger.error("Lazarus not initialised. Run: python -m lazarus init")
-        sys.exit(1)
+        raise FileNotFoundError("Lazarus configuration not found")
 
     logger.info("⚰️  Lazarus heartbeat agent starting...")
     _write_pid_file()
@@ -200,7 +223,7 @@ def start_agent(config_path: Optional[Path] = None) -> None:
     # Fire heartbeat immediately on startup so we don't wait up to 1h
     _scheduler.add_job(
         func=lambda: heartbeat_job(config_path=check_path),
-        trigger="date",           # fire once, right now
+        trigger="date",  # fire once, right now
         id="heartbeat_boot",
         name="Lazarus boot check",
     )
@@ -208,10 +231,13 @@ def start_agent(config_path: Optional[Path] = None) -> None:
     # Graceful shutdown on SIGTERM (systemd sends this)
     signal.signal(signal.SIGTERM, _sigterm_handler)
 
-    logger.info("Agent armed. Heartbeat every %dh. Press Ctrl-C to stop.", HEARTBEAT_INTERVAL_HOURS)
+    logger.info(
+        "Agent armed. Heartbeat every %dh. Press Ctrl-C to stop.",
+        HEARTBEAT_INTERVAL_HOURS,
+    )
 
     try:
-        _scheduler.start()   # blocks until shutdown() is called or KeyboardInterrupt
+        _scheduler.start()  # blocks until shutdown() is called or KeyboardInterrupt
     except (KeyboardInterrupt, SystemExit):
         logger.info("Agent shutting down.")
         stop_agent()
@@ -221,8 +247,9 @@ def stop_agent() -> None:
     """Gracefully shut down the scheduler if it is running."""
     global _scheduler
     if _scheduler and _scheduler.running:
-        _scheduler.shutdown(wait=False)
-        logger.info("Scheduler stopped.")
+        # Wait for scheduler to fully shut down before returning
+        _scheduler.shutdown(wait=True)
+        logger.info("Scheduler stopped gracefully.")
     _scheduler = None
     _remove_pid_file()
 
@@ -236,6 +263,7 @@ def _sigterm_handler(signum, frame):
 # ---------------------------------------------------------------------------
 # Heartbeat job
 # ---------------------------------------------------------------------------
+
 
 def heartbeat_job(config_path: Optional[Path] = None) -> None:
     """
@@ -266,26 +294,32 @@ def heartbeat_job(config_path: Optional[Path] = None) -> None:
         logger.info("Switch is disarmed — nothing to do.")
         return
 
-    since     = days_since_checkin(config)
+    since = days_since_checkin(config)
     remaining = days_remaining(config)
 
     logger.info(
         "Heartbeat ✓ | days elapsed: %.1f | days remaining: %.1f | armed: %s",
-        since, remaining, config.armed,
+        since,
+        remaining,
+        config.armed,
     )
 
     # Reset dedup state if the owner has recently checked in below each threshold
     if since < REMINDER_DAY:
-        _alert_state.reminder_sent   = False
+        _alert_state.reminder_sent = False
     if since < TELEGRAM_DAY:
-        _alert_state.telegram_sent   = False
+        _alert_state.telegram_sent = False
     if since < FINAL_WARN_DAY:
         _alert_state.final_warn_sent = False
 
     # --- Trigger check (highest priority) ---
     if is_trigger_due(config):
         if not _alert_state.triggered:
-            logger.critical("TRIGGER: days elapsed %.1f >= interval %d. Firing.", since, config.checkin_interval_days)
+            logger.critical(
+                "TRIGGER: days elapsed %.1f >= interval %d. Firing.",
+                since,
+                config.checkin_interval_days,
+            )
             trigger_delivery(config_path=check_path)
             _alert_state.triggered = True
         else:
@@ -332,7 +366,8 @@ def heartbeat_job(config_path: Optional[Path] = None) -> None:
 
 def _fire_alert(fn, label: str) -> None:
     """Call an alert function, logging but not re-raising on failure."""
-    from lazarus.agent.alerts import AlertError
+    from agent.alerts import AlertError
+
     try:
         fn()
     except AlertError as exc:
@@ -344,6 +379,7 @@ def _fire_alert(fn, label: str) -> None:
 # ---------------------------------------------------------------------------
 # Trigger
 # ---------------------------------------------------------------------------
+
 
 def trigger_delivery(config_path: Optional[Path] = None) -> None:
     """
@@ -372,11 +408,16 @@ def trigger_delivery(config_path: Optional[Path] = None) -> None:
         raise
 
     if not config.armed:
-        logger.warning("trigger_delivery called but switch is already disarmed — skipping.")
+        logger.warning(
+            "trigger_delivery called but switch is already disarmed — skipping."
+        )
         return
 
     logger.critical("=" * 60)
-    logger.critical("LAZARUS TRIGGER FIRED at %s UTC", time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()))
+    logger.critical(
+        "LAZARUS TRIGGER FIRED at %s UTC",
+        time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()),
+    )
     safe_config = _sanitize_config_for_logging(config)
     logger.critical("Config: %s", safe_config)
     logger.critical("=" * 60)
@@ -395,7 +436,9 @@ def trigger_delivery(config_path: Optional[Path] = None) -> None:
                 key_blob_b64=config.vault.key_blob,
                 ipfs_cid=config.vault.ipfs_cid,
             )
-            logger.critical("Delivery email sent successfully to %s.", config.beneficiary.email)
+            logger.critical(
+                "Delivery email sent successfully to %s.", config.beneficiary.email
+            )
             delivery_success = True
     except Exception as exc:
         logger.critical("DELIVERY EMAIL FAILED: %s", exc)
@@ -413,6 +456,7 @@ def trigger_delivery(config_path: Optional[Path] = None) -> None:
 # ---------------------------------------------------------------------------
 # Watchdog
 # ---------------------------------------------------------------------------
+
 
 def watchdog_job(scheduler=None) -> None:
     """
@@ -438,4 +482,6 @@ def watchdog_job(scheduler=None) -> None:
             coalesce=True,
         )
     else:
-        logger.debug("Watchdog: heartbeat job is alive. Next run: %s", job.next_run_time)
+        logger.debug(
+            "Watchdog: heartbeat job is alive. Next run: %s", job.next_run_time
+        )

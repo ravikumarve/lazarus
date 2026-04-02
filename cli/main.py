@@ -51,52 +51,20 @@ def init():
       - Encrypting and storing the vault
     """
     try:
-        from cli.setup import run_setup_wizard
+        from agent.heartbeat import start_agent
 
-        run_setup_wizard()
+        start_agent()
+        console.print("[green]✓ Agent started successfully[/green]")
     except ImportError:
-        console.print("[red]Setup wizard dependencies not installed[/red]")
-        console.print("Run: pip install questionary")
+        console.print("[red]❌ Agent dependencies not installed[/red]")
+        console.print("Run: pip install APScheduler")
         raise
-
-
-# ---------------------------------------------------------------------------
-# lazarus ping
-# ---------------------------------------------------------------------------
-
-
-@cli.command()
-def ping():
-    """
-    Manual check-in — resets the countdown timer.
-
-    Loads the current config, records a check-in with the current timestamp,
-    saves the updated config, and displays the days remaining until trigger.
-    """
-    try:
-        config = load_config()
-        config = record_checkin(config)
-        save_config(config)
-
-        remaining = days_remaining(config)
-
-        if math.isinf(remaining):
-            console.print("[green]✔ Check-in recorded.[/green]")
-            console.print(
-                "[yellow]⚠  No previous check-in found. Starting timer now.[/yellow]"
-            )
-        elif remaining > 0:
-            console.print(
-                f"[green]✔ Check-in recorded. {remaining:.1f} days remaining.[/green]"
-            )
-        else:
-            console.print(
-                f"[red]⚠  Check-in recorded but trigger is overdue by {-remaining:.1f} days.[/red]"
-            )
-
     except FileNotFoundError:
         console.print("[red]❌ Lazarus not initialized.[/red]")
         console.print("Run: python -m lazarus init")
+        return
+    except Exception as e:
+        console.print(f"[red]❌ Failed to start agent: {e}[/red]")
         return
     except ConfigCorruptedError as e:
         console.print(f"[red]❌ Config file is corrupted: {e}[/red]")
@@ -213,24 +181,44 @@ def agent():
 def agent_start():
     """
     Start the background heartbeat agent.
-
-    TODO: delegate to agent/heartbeat.py::start_agent()
     """
     console.print("[green]Agent starting...[/green]")
-    # TODO: from lazarus.agent.heartbeat import start_agent; start_agent()
-    raise NotImplementedError
+    try:
+        from agent.heartbeat import start_agent
+
+        start_agent()
+        console.print("[green]✓ Agent started successfully[/green]")
+    except ImportError:
+        console.print("[red]❌ Agent dependencies not installed[/red]")
+        console.print("Run: pip install APScheduler")
+        raise
+    except FileNotFoundError:
+        console.print("[red]❌ Lazarus not initialized.[/red]")
+        console.print("Run: python -m lazarus init")
+        return
+    except Exception as e:
+        console.print(f"[red]❌ Failed to start agent: {e}[/red]")
+        return
 
 
 @agent.command("stop")
 def agent_stop():
     """
     Stop the background heartbeat agent.
-
-    TODO: delegate to agent/heartbeat.py::stop_agent()
     """
     console.print("[yellow]Agent stopping...[/yellow]")
-    # TODO: implement
-    raise NotImplementedError
+    try:
+        from agent.heartbeat import stop_agent
+
+        stop_agent()
+        console.print("[green]✓ Agent stopped successfully[/green]")
+    except ImportError:
+        console.print("[red]❌ Agent dependencies not installed[/red]")
+        console.print("Run: pip install APScheduler")
+        raise
+    except Exception as e:
+        console.print(f"[red]❌ Failed to stop agent: {e}[/red]")
+        return
 
 
 # ---------------------------------------------------------------------------
