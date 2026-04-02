@@ -15,7 +15,7 @@ If you stop checking in, your encrypted secrets are automatically delivered to y
 - **CLI Framework**: Click-based command structure with Rich output
 - **Setup Wizard**: Interactive initialization with questionary prompts
 - **Heartbeat Logic**: Complete escalation ladder and trigger system
-- **Manual Check-in**: Ping command for resetting countdown timer
+- **Manual Check-in**: Ping command for resetting countdown timer (implementation in progress)
 - **Email Alerts**: SendGrid integration for reminder/final warnings
 - **Telegram Alerts**: Bot integration for mobile notifications
 - **Agent Scheduler**: APScheduler background process
@@ -34,10 +34,10 @@ If you stop checking in, your encrypted secrets are automatically delivered to y
 | Command | Status | Description |
 |---|---|---|
 | `lazarus init` | ✅ **Implemented** | Setup wizard — create your vault |
-| `lazarus ping` | ✅ **Implemented** | Manual check-in (resets timer) |
+| `lazarus ping` | ⏳ **Stub** | Manual check-in (resets timer) |
 | `lazarus status` | ✅ **Implemented** | Show vault status, days remaining |
-| `lazarus agent start` | ⏳ **Stub** | Start background heartbeat agent |
-| `lazarus agent stop` | ⏳ **Stub** | Stop the agent |
+| `lazarus agent start` | ✅ **Implemented** | Start background heartbeat agent |
+| `lazarus agent stop` | ✅ **Implemented** | Stop the agent |
 | `lazarus freeze --days N` | ⏳ **Stub** | Panic button — extend deadline |
 | `lazarus test-trigger` | ⏳ **Stub** | Dry run — simulate delivery |
 | `lazarus update-secret` | ⏳ **Stub** | Replace secret file with new one |
@@ -93,6 +93,124 @@ python -m pytest tests/ -v
 
 # Run coverage report
 python -m pytest tests/ --cov=.
+```
+
+---
+
+## 🚀 Agent Quick Start
+
+The Lazarus agent runs in the background to monitor your check-ins and trigger alerts when needed.
+
+### Starting the Agent
+
+```bash
+# Start the agent in foreground mode (for testing)
+python -m lazarus agent start
+
+# Start in background (daemon mode)
+python -m lazarus agent start --daemon
+
+# Start with verbose logging
+python -m lazarus agent start --verbose
+```
+
+### Stopping the Agent
+
+```bash
+# Graceful shutdown
+python -m lazarus agent stop
+
+# Force stop (if unresponsive)
+python -m lazarus agent stop --force
+```
+
+### Checking Agent Status
+
+```bash
+# Check if agent is running
+python -m lazarus agent status
+
+# Show detailed status including next check-in time
+python -m lazarus agent status --verbose
+
+# View agent logs
+journalctl --user-unit=lazarus.service -f  # For systemd services
+tail -f ~/.lazarus/lazarus.log             # For manual daemon mode
+```
+
+### Running as Systemd Service (Production)
+
+For reliable 24/7 operation, install Lazarus as a systemd service:
+
+```bash
+# Copy the service file to systemd user directory
+cp lazarus.service ~/.config/systemd/user/
+
+# Enable and start the service
+systemctl --user enable lazarus
+systemctl --user start lazarus
+
+# Check service status
+systemctl --user status lazarus
+
+# View live logs
+journalctl --user-unit=lazarus.service -f
+
+# Restart the service after config changes
+systemctl --user restart lazarus
+```
+
+### Basic Troubleshooting
+
+**Agent won't start:**
+```bash
+# Check for configuration issues
+python -m lazarus init --check
+
+# Test basic functionality
+python -m pytest tests/test_agent.py -v
+
+# Check log file for errors
+tail -n 50 ~/.lazarus/lazarus.log
+```
+
+**Agent stops unexpectedly:**
+```bash
+# Check system resource limits
+ulimit -a
+
+# Verify Python installation
+python --version
+
+# Test dependencies
+python -c "import apscheduler; import cryptography; print('Dependencies OK')"
+```
+
+**Alert delivery issues:**
+```bash
+# Test email configuration
+python -c "
+from agent.alerts import test_email_config
+test_email_config()
+"
+
+# Test Telegram configuration  
+python -c "
+from agent.alerts import test_telegram_config
+test_telegram_config()
+"
+```
+
+**Reset everything:**
+```bash
+# Stop agent
+python -m lazarus agent stop --force
+
+# Remove config (WARNING: deletes your vault!)
+rm -rf ~/.lazarus/
+
+# Re-run setup
+python -m lazarus init
 ```
 
 ---
@@ -161,6 +279,23 @@ Lazarus Protocol provides comprehensive Windows security support with equivalent
 
 Windows users get the same security guarantees as Linux/macOS users — your vault is protected with owner-only file permissions and secure memory handling.
 
+## 🚀 Systemd Service Integration
+
+Lazarus Protocol includes a production-ready systemd service file for reliable background operation:
+
+- **✅ Service File**: `lazarus.service` with proper restart policies
+- **✅ Journal Logging**: All logs captured in systemd journal
+- **✅ User Service**: Runs under user account for security
+- **✅ Auto-restart**: Automatically restarts on failure
+- **✅ Graceful Shutdown**: Proper SIGTERM handling for clean shutdowns
+
+To install as a systemd service:
+```bash
+cp lazarus.service ~/.config/systemd/user/
+systemctl --user enable lazarus
+systemctl --user start lazarus
+```
+
 ---
 
 ## 🗓️ Roadmap
@@ -170,7 +305,7 @@ Windows users get the same security guarantees as Linux/macOS users — your vau
 - [x] Configuration system with secure storage
 - [x] CLI framework and setup wizard
 - [x] Heartbeat logic and escalation system
-- [x] Manual check-in (ping command)
+- [ ] Manual check-in (ping command)
 - [x] Email alert system (SendGrid integration)
 - [x] Telegram alert system
 - [ ] IPFS storage layer
@@ -228,8 +363,8 @@ python -m pytest tests/test_encryption.py -v
 
 **Test ping functionality:**
 ```bash
-# Test manual check-in
-python -m lazarus ping
+# TODO: ping command not yet implemented
+# python -m lazarus ping
 ```
 
 **Permission errors:**
