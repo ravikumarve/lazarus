@@ -54,24 +54,24 @@ def init():
         from agent.heartbeat import start_agent
 
         start_agent()
-        console.print(f""[green]✓ Agent started successfully[/green]")
+        console.print("[green]✓ Agent started successfully[/green]")
     except ImportError:
-        console.print(f""[red]❌ Agent dependencies not installed[/red]")
-        console.print(f""Run: pip install APScheduler")
+        console.print("[red]❌ Agent dependencies not installed[/red]")
+        console.print("Run: pip install APScheduler")
         raise
     except FileNotFoundError:
-        console.print(f""[red]❌ Lazarus not initialized.[/red]")
-        console.print(f""Run: python -m lazarus init")
+        console.print("[red]❌ Lazarus not initialized.[/red]")
+        console.print("Run: python -m lazarus init")
         return
     except Exception as e:
-        console.print(f"f"[red]❌ Failed to start agent: {e}[/red]")
+        console.print(f"[red]❌ Failed to start agent: {e}[/red]")
         return
     except ConfigCorruptedError as e:
-        console.print(f"f"[red]❌ Config file is corrupted: {e}[/red]")
-        console.print(f""Run: python -m lazarus init to recreate configuration")
+        console.print(f"[red]❌ Config file is corrupted: {e}[/red]")
+        console.print("Run: python -m lazarus init to recreate configuration")
         return
     except Exception as e:
-        console.print(f"f"[red]❌ Error recording check-in: {e}[/red]")
+        console.print(f"[red]❌ Error recording check-in: {e}[/red]")
         return
 
 
@@ -151,18 +151,18 @@ def status():
                 "⚠️  Status", "[yellow]Never checked in - timer starts on first ping[/]"
             )
 
-        console.print(f"table)
+        console.print(table)
 
     except FileNotFoundError:
-        console.print(f""[red]❌ Lazarus not initialized.[/red]")
-        console.print(f""Run: python -m lazarus init")
+        console.print("[red]❌ Lazarus not initialized.[/red]")
+        console.print("Run: python -m lazarus init")
         return
     except ConfigCorruptedError as e:
-        console.print(f"f"[red]❌ Config file is corrupted: {e}[/red]")
-        console.print(f""Run: python -m lazarus init to recreate configuration")
+        console.print(f"[red]❌ Config file is corrupted: {e}[/red]")
+        console.print("Run: python -m lazarus init to recreate configuration")
         return
     except Exception as e:
-        console.print(f"f"[red]❌ Error loading status: {e}[/red]")
+        console.print(f"[red]❌ Error loading status: {e}[/red]")
         return
 
 
@@ -171,7 +171,6 @@ def status():
 # ---------------------------------------------------------------------------
 
 
-@cli.command()
 @cli.command()
 def ping():
     """Manual check-in — reset the countdown timer."""
@@ -181,33 +180,43 @@ def ping():
         save_config(updated_config)
 
         # Format timestamp and show success message
-        timestamp = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.g极time())
-        console.print(f"f"[green]✓ Check-in recorded at {timestamp}[/green]")
+        timestamp = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())
+        console.print(f"[green]✓ Check-in recorded at {timestamp}[/green]")
 
         # Show days remaining
         remaining = days_remaining(updated_config)
         if math.isinf(remaining) and remaining > 0:
-            console.print(f""[yellow]Timer started - first check-in recorded[/yellow]")
+            console.print("[yellow]Timer started - first check-in recorded[/yellow]")
         elif remaining > 0:
-            console.print(f"
+            console.print(
                 f"[green]Timer reset - next check-in due in {remaining:.1f} days[/green]"
             )
         else:
-            console.print(f"
+            console.print(
                 f"[red]WARNING: Timer is {abs(remaining):.1f} days overdue![/red]"
             )
 
     except FileNotFoundError:
-        console.print(f""[red]❌ Lazarus not initialized.[/red]")
-        console.print(f""Run: python -m lazarus init")
+        console.print("[red]❌ Lazarus not initialized.[/red]")
+        console.print("Run: python -m lazarus init")
         return
     except ConfigCorruptedError as e:
-        console.print(f"f"[red]❌ Config file is corrupted: {e}[/red]")
-        console.print(f""Run: python -m lazarus init to recreate configuration")
+        console.print(f"[red]❌ Config file is corrupted: {e}[/red]")
+        console.print("Run: python -m lazarus init to recreate configuration")
         return
     except Exception as e:
-        console.print(f"f"[red]❌ Error recording check-in: {e}[/red]")
+        console.print(f"[red]❌ Error recording check-in: {e}[/red]")
         return
+
+
+# ---------------------------------------------------------------------------
+# lazarus agent (sub-group)
+# ---------------------------------------------------------------------------
+
+
+@cli.group()
+def agent():
+    """Manage the background heartbeat agent."""
     pass
 
 
@@ -216,28 +225,43 @@ def agent_start():
     """
     Start the background heartbeat agent.
     """
-    console.print(f""[green]Agent starting...[/green]")
+    console.print("[green]Agent starting...[/green]")
     try:
         from agent.heartbeat import start_agent
 
         start_agent()
-        console.print(f""[green]✓ Agent started successfully[/green]")
+        console.print("[green]✓ Agent started successfully[/green]")
     except ImportError:
-        console.print(f""[red]❌ Agent dependencies not installed[/red]")
-        console.print(f""Run: pip install APScheduler")
+        console.print("[red]❌ Agent dependencies not installed[/red]")
+        console.print("Run: pip install APScheduler")
         raise
     except FileNotFoundError:
-        console.print(f""[red]❌ Lazarus not initialized.[/red]")
-        console.print(f""Run: python -m lazarus init")
+        console.print("[red]❌ Lazarus not initialized.[/red]")
+        console.print("Run: python -m lazarus init")
         return
     except Exception as e:
-        console.print(f"f"[red]❌ Failed to start agent: {e}[/red]")
+        console.print(f"[red]❌ Failed to start agent: {e}[/red]")
         return
 
 
-# ---------------------------------------------------------------------------
-# lazarus ping
-# ---------------------------------------------------------------------------
+@agent.command("stop")
+def agent_stop():
+    """
+    Stop the background heartbeat agent.
+    """
+    console.print("[yellow]Agent stopping...[/yellow]")
+    try:
+        from agent.heartbeat import stop_agent
+
+        stop_agent()
+        console.print("[green]✓ Agent stopped successfully[/green]")
+    except ImportError:
+        console.print("[red]❌ Agent dependencies not installed[/red]")
+        console.print("Run: pip install APScheduler")
+        raise
+    except Exception as e:
+        console.print(f"[red]❌ Failed to stop agent: {e}[/red]")
+        return
 
 
 # ---------------------------------------------------------------------------
@@ -258,7 +282,7 @@ def freeze(days: int):
         2. Add 'days' to last_checkin_timestamp equivalent
         3. Save config + print confirmation
     """
-    console.print(f"f"[bold cyan]🧊 Deadline extended by {days} days.[/bold cyan]")
+    console.print(f"[bold cyan]🧊 Deadline extended by {days} days.[/bold cyan]")
     # TODO: implement
     raise NotImplementedError
 
@@ -279,7 +303,7 @@ def test_trigger():
         3. Print what would be sent, to whom, and how
         4. Do NOT call the real send functions
     """
-    console.print(f""[bold magenta]🔬 Test trigger (dry run)[/bold magenta]")
+    console.print("[bold magenta]🔬 Test trigger (dry run)[/bold magenta]")
     # TODO: implement
     raise NotImplementedError
 
@@ -301,7 +325,7 @@ def update_secret(new_secret_path: str):
         3. Update vault + upload to IPFS if configured
         4. Save config
     """
-    console.print(f"f"[green]Updating secret from: {new_secret_path}[/green]")
+    console.print(f"[green]Updating secret from: {new_secret_path}[/green]")
     # TODO: implement
     raise NotImplementedError
 
