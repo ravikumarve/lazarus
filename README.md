@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="assets/lazarus-logo.png" width="120" alt="Lazarus Protocol logo" />
-</p>
-
 <h1 align="center">⚰️ Lazarus Protocol</h1>
 
 <p align="center">
@@ -30,7 +26,8 @@
 </p>
 
 <p align="center">
-  <img src="assets/demo.gif" width="700" alt="Lazarus Protocol demo showing setup, encryption, and alert flow" />
+  <strong>📺 Demo Coming Soon</strong><br/>
+  <em>See <a href="assets/demo-instructions.md">demo creation guide</a> for details</em>
 </p>
 
 ---
