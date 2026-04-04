@@ -88,6 +88,97 @@ export TELEGRAM_BOT_TOKEN="your_bot_token"
 export TELEGRAM_CHAT_ID="your_chat_id"
 ```
 
+### IPFS Storage (Optional but Recommended)
+
+Lazarus Protocol supports IPFS (InterPlanetary File System) for redundant storage of your encrypted vault. While local storage is sufficient for basic operation, IPFS provides:
+
+- **Redundancy**: Multiple copies across the IPFS network
+- **Resilience**: Survives local hardware failure
+- **Accessibility**: Beneficiaries can retrieve from any IPFS node
+- **Censorship Resistance**: Decentralized storage can't be taken down
+
+#### Option 1: Local IPFS Node (Recommended for Privacy)
+
+```bash
+# Install IPFS Kubo (official Go implementation)
+# Linux/macOS:
+curl -O https://dist.ipfs.tech/kubo/v0.28.0/kubo_v0.28.0_linux-amd64.tar.gz  # Linux
+curl -O https://dist.ipfs.tech/kubo/v0.28.0/kubo_v0.28.0_darwin-amd64.tar.gz  # macOS
+
+# Extract and install
+tar -xvzf kubo_v0.28.0_*.tar.gz
+cd kubo
+sudo ./install.sh
+
+# Windows (PowerShell):
+# Download from https://dist.ipfs.tech/kubo/v0.28.0/kubo_v0.28.0_windows-amd64.zip
+# Extract and add to PATH
+
+# Initialize your IPFS node
+ipfs init --profile=lowpower
+
+# Configure for local network only (enhanced privacy)
+ipfs config Addresses.Gateway /ip4/127.0.0.1/tcp/8080
+ipfs config Addresses.API /ip4/127.0.0.1/tcp/5001
+
+# Start the IPFS daemon
+ipfs daemon &
+
+# Verify IPFS is running
+ipfs id
+```
+
+#### Option 2: Pinata Cloud (Easy Setup)
+
+For cloud-based IPFS without running your own node:
+
+```bash
+# Sign up at https://pinata.cloud (free tier available)
+# Get your API keys from the dashboard
+
+export PINATA_API_KEY="your_pinata_api_key"
+export PINATA_SECRET_API_KEY="your_pinata_secret_key"
+```
+
+#### Configure Lazarus for IPFS
+
+Add IPFS configuration to your Lazarus setup:
+
+```bash
+# For local IPFS node (default)
+export IPFS_NODE_URL="http://localhost:5001"
+
+# For Pinata cloud (optional)
+export IPFS_PINATA_API_KEY="$PINATA_API_KEY"
+export IPFS_PINATA_SECRET_API_KEY="$PINATA_SECRET_API_KEY"
+
+# Or configure in ~/.lazarus/config.json:
+{
+  "ipfs": {
+    "enabled": true,
+    "node_url": "http://localhost:5001",
+    "pinata_api_key": "optional_pinata_key",
+    "pinata_secret": "optional_pinata_secret"
+  }
+}
+```
+
+#### Test IPFS Integration
+
+```bash
+# Test IPFS connection
+lazarus ipfs test
+
+# Manually store a file to IPFS
+lazarus ipfs store ~/.lazarus/vault.encrypted
+
+# Check IPFS status
+lazarus ipfs status
+
+# Retrieve from IPFS (for testing)
+lazarus ipfs retrieve <cid> /tmp/recovered-file
+```
+
 ### Production Deployment with Systemd
 ```bash
 # Install as systemd service for 24/7 operation
