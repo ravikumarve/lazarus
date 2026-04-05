@@ -50,10 +50,66 @@
 
 ## 📦 Quick Start (30 Seconds to Safety)
 
+### Option 1: Install from PyPI (Recommended)
 ```bash
-# Install from PyPI
+# Install the latest stable release
 pip install lazarus-protocol
 
+# Or install with specific version
+pip install lazarus-protocol==0.1.0
+
+# For development/testing, install from GitHub
+pip install git+https://github.com/ravikumarve/lazarus.git
+```
+
+### Option 2: Install via Docker
+```bash
+# Pull the latest Docker image
+docker pull ghcr.io/ravikumarve/lazarus:latest
+
+# Run Lazarus Protocol
+docker run -it --rm \
+  -v $(pwd)/config:/app/config \
+  -v $(pwd)/data:/app/data \
+  -p 8000:8000 \
+  ghcr.io/ravikumarve/lazarus:latest \
+  lazarus init
+
+# Or use Docker Compose
+echo 'version: "3.8"
+services:
+  lazarus:
+        image: ghcr.io/ravikumarve/lazarus:latest
+    container_name: lazarus-protocol
+    restart: unless-stopped
+    volumes:
+      - ./config:/app/config
+      - ./data:/app/data
+    ports:
+      - "8000:8000"
+    environment:
+      - LAZARUS_HOME=/app
+      - PYTHONUNBUFFERED=1
+' > docker-compose.yml
+
+docker compose up -d
+```
+
+### Option 3: Install from Source
+```bash
+# Clone the repository
+git clone https://github.com/ravikumarve/lazarus.git
+cd lazarus
+
+# Install in development mode
+pip install -e .[dev]
+
+# Or install production version
+pip install .
+```
+
+### Initialize Your Vault
+```bash
 # Initialize your vault (creates ~/.lazarus/config.json)
 lazarus init
 
@@ -78,7 +134,7 @@ lazarus ping
 ```bash
 # Set up SendGrid for email alerts
 export SENDGRID_API_KEY="your_sendgrid_key"
-export ALERT_FROM_EMAIL="your@email.com"
+export ALERT_FROM_EMAIL="ravikumarve@protonmail.com"
 ```
 
 ### Telegram Alerts (Optional)
@@ -304,6 +360,164 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 4. Commit your changes (`git commit -m 'feat: add amazing feature'`)
 5. Push to the branch (`git push origin feature/amazing-feature`)
 6. Open a Pull Request
+
+## 📦 Comprehensive Installation Guide
+
+### Platform-Specific Installation
+
+#### Linux/macOS
+```bash
+# Using pip (recommended)
+pip3 install lazarus-protocol
+
+# Using pipx (isolated environment)
+pipx install lazarus-protocol
+
+# Using system package manager (if available)
+# Coming soon: apt, yum, brew packages
+```
+
+#### Windows
+```bash
+# Using pip
+pip install lazarus-protocol
+
+# Using Windows Package Manager (winget)
+# Coming soon: winget install LazarusProtocol
+
+# Using Chocolatey
+# Coming soon: choco install lazarus-protocol
+```
+
+### Docker Deployment
+
+#### Production Deployment
+```bash
+# Multi-platform Docker image
+docker run -d \
+  --name lazarus \
+  -v /path/to/config:/app/config \
+  -v /path/to/data:/app/data \
+  -p 8000:8000 \
+  --restart unless-stopped \
+  ghcr.io/ravikumarve/lazarus:latest
+```
+
+#### Development with Docker
+```bash
+# Build from source
+docker build -t lazarus-protocol .
+
+# Run with hot-reload for development
+docker run -it \
+  -v $(pwd):/app \
+  -v lazarus-config:/app/config \
+  -p 8000:8000 \
+  -p 8001:8001 \
+  lazarus-protocol \
+  lazarus run --host 0.0.0.0 --port 8000 --reload
+```
+
+### Kubernetes Deployment
+
+```yaml
+# lazarus-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lazarus-protocol
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: lazarus
+  template:
+    metadata:
+      labels:
+        app: lazarus
+    spec:
+      containers:
+      - name: lazarus
+    image: ghcr.io/ravikumarve/lazarus:latest
+        ports:
+        - containerPort: 8000
+        volumeMounts:
+        - name: config
+          mountPath: /app/config
+        - name: data
+          mountPath: /app/data
+        env:
+        - name: LAZARUS_HOME
+          value: "/app"
+      volumes:
+      - name: config
+        persistentVolumeClaim:
+          claimName: lazarus-config
+      - name: data
+        persistentVolumeClaim:
+          claimName: lazarus-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: lazarus-service
+spec:
+  selector:
+    app: lazarus
+  ports:
+  - port: 80
+    targetPort: 8000
+  type: LoadBalancer
+```
+
+### Building from Source
+
+#### Prerequisites
+- Python 3.10+
+- pip
+- git
+
+#### Build Steps
+```bash
+# Clone the repository
+git clone https://github.com/ravikumarve/lazarus.git
+cd lazarus
+
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # Linux/macOS
+# venv\Scripts\activate  # Windows
+
+# Install build dependencies
+pip install build wheel twine
+
+# Build package
+python -m build
+
+# Install the built package
+pip install dist/lazarus_protocol-*.whl
+
+# Or install in development mode
+pip install -e .[dev]
+```
+
+### Verifying Installation
+
+```bash
+# Check version
+lazarus --version
+
+# Test basic functionality
+lazarus --help
+
+# Verify all dependencies are available
+python -c "
+import cryptography
+import click
+import rich
+print('✅ All dependencies installed successfully')
+"
+```
 
 ## 📜 License
 
