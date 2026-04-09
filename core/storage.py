@@ -37,10 +37,10 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 # Defaults
-DEFAULT_IPFS_API_URL    = "http://127.0.0.1:5001"
-DEFAULT_IPFS_GATEWAY    = "http://127.0.0.1:8080"
-PINATA_UPLOAD_URL       = "https://api.pinata.cloud/pinning/pinFileToIPFS"
-PINATA_TEST_URL         = "https://api.pinata.cloud/data/testAuthentication"
+DEFAULT_IPFS_API_URL = "http://127.0.0.1:5001"
+DEFAULT_IPFS_GATEWAY = "http://127.0.0.1:8080"
+PINATA_UPLOAD_URL = "https://api.pinata.cloud/pinning/pinFileToIPFS"
+PINATA_TEST_URL = "https://api.pinata.cloud/data/testAuthentication"
 
 # Public IPFS gateways tried in order during download
 PUBLIC_GATEWAYS = [
@@ -49,7 +49,7 @@ PUBLIC_GATEWAYS = [
     "https://gateway.pinata.cloud/ipfs/{cid}",
 ]
 
-REQUEST_TIMEOUT = 30   # seconds
+REQUEST_TIMEOUT = 30  # seconds
 MAX_DOWNLOAD_BYTES = 100 * 1024 * 1024  # 100MB limit for IPFS downloads
 
 
@@ -57,14 +57,17 @@ MAX_DOWNLOAD_BYTES = 100 * 1024 * 1024  # 100MB limit for IPFS downloads
 # Custom exception
 # ---------------------------------------------------------------------------
 
+
 class StorageError(Exception):
     """Raised when all storage backends fail."""
+
     pass
 
 
 # ---------------------------------------------------------------------------
 # IPFS upload
 # ---------------------------------------------------------------------------
+
 
 def upload_to_ipfs(file_path: Path) -> str:
     """
@@ -110,8 +113,8 @@ def upload_to_ipfs(file_path: Path) -> str:
         errors.append("pinata: not configured (PINATA_API_KEY missing)")
 
     raise StorageError(
-        f"All IPFS upload methods failed for {file_path.name}:\n  " +
-        "\n  ".join(errors)
+        f"All IPFS upload methods failed for {file_path.name}:\n  "
+        + "\n  ".join(errors)
     )
 
 
@@ -128,7 +131,7 @@ def _upload_via_local_node(file_path: Path) -> str:
     """
     import requests
 
-    api_url  = os.getenv("IPFS_API_URL", DEFAULT_IPFS_API_URL)
+    api_url = os.getenv("IPFS_API_URL", DEFAULT_IPFS_API_URL)
     endpoint = f"{api_url.rstrip('/')}/api/v0/add"
 
     with open(file_path, "rb") as f:
@@ -149,10 +152,14 @@ def _upload_via_local_node(file_path: Path) -> str:
     if not cid:
         cid_obj = data.get("cid")
         if not isinstance(cid_obj, dict):
-            raise StorageError(f"IPFS API response missing valid Hash or cid field: {data}")
+            raise StorageError(
+                f"IPFS API response missing valid Hash or cid field: {data}"
+            )
         cid = cid_obj.get("/")
         if not cid:
-            raise StorageError(f"IPFS API response missing CID value in cid field: {data}")
+            raise StorageError(
+                f"IPFS API response missing CID value in cid field: {data}"
+            )
 
     return cid
 
@@ -170,14 +177,14 @@ def _upload_via_pinata(file_path: Path) -> str:
     """
     import requests
 
-    api_key    = os.getenv("PINATA_API_KEY", "")
+    api_key = os.getenv("PINATA_API_KEY", "")
     secret_key = os.getenv("PINATA_SECRET_KEY", "")
 
     if not api_key or not secret_key:
         raise StorageError("Pinata API keys not configured.")
 
     headers = {
-        "pinata_api_key":        api_key,
+        "pinata_api_key": api_key,
         "pinata_secret_api_key": secret_key,
     }
 
@@ -197,7 +204,7 @@ def _upload_via_pinata(file_path: Path) -> str:
         )
 
     data = response.json()
-    cid  = data.get("IpfsHash")
+    cid = data.get("IpfsHash")
     if not cid:
         raise StorageError(f"Pinata response missing IpfsHash: {data}")
 
@@ -207,6 +214,7 @@ def _upload_via_pinata(file_path: Path) -> str:
 # ---------------------------------------------------------------------------
 # IPFS download
 # ---------------------------------------------------------------------------
+
 
 def download_from_ipfs(cid: str, output_path: Path) -> Path:
     """
@@ -234,8 +242,12 @@ def download_from_ipfs(cid: str, output_path: Path) -> Path:
     ] + [gw.format(cid=cid) for gw in PUBLIC_GATEWAYS]
 
     for gw in gateways:
-        if not gw.startswith('https://') and '127.0.0.1' not in gw and 'localhost' not in gw:
-            logger.warning('Non-HTTPS IPFS gateway detected: %s', gw)
+        if (
+            not gw.startswith("https://")
+            and "127.0.0.1" not in gw
+            and "localhost" not in gw
+        ):
+            logger.warning("Non-HTTPS IPFS gateway detected: %s", gw)
 
     errors: list[str] = []
     for gateway_url in gateways:
@@ -265,14 +277,14 @@ def download_from_ipfs(cid: str, output_path: Path) -> Path:
             continue
 
     raise StorageError(
-        f"Failed to download CID {cid} from all gateways:\n  " +
-        "\n  ".join(errors)
+        f"Failed to download CID {cid} from all gateways:\n  " + "\n  ".join(errors)
     )
 
 
 # ---------------------------------------------------------------------------
 # Local fallback
 # ---------------------------------------------------------------------------
+
 
 def store_locally(file_path: Path, dest_dir: Path) -> Path:
     """
@@ -291,7 +303,7 @@ def store_locally(file_path: Path, dest_dir: Path) -> Path:
         FileNotFoundError: if file_path does not exist.
     """
     file_path = Path(file_path)
-    dest_dir  = Path(dest_dir)
+    dest_dir = Path(dest_dir)
 
     if not file_path.exists():
         raise FileNotFoundError(f"Source file not found: {file_path}")
@@ -308,6 +320,7 @@ def store_locally(file_path: Path, dest_dir: Path) -> Path:
 # Availability checks
 # ---------------------------------------------------------------------------
 
+
 def ipfs_available() -> bool:
     """
     Ping the local IPFS node. Returns True if reachable within timeout.
@@ -316,7 +329,7 @@ def ipfs_available() -> bool:
     """
     import requests
 
-    api_url  = os.getenv("IPFS_API_URL", DEFAULT_IPFS_API_URL)
+    api_url = os.getenv("IPFS_API_URL", DEFAULT_IPFS_API_URL)
     endpoint = f"{api_url.rstrip('/')}/api/v0/version"
 
     try:
@@ -342,7 +355,7 @@ def pinata_reachable() -> bool:
         return False
 
     headers = {
-        "pinata_api_key":        os.getenv("PINATA_API_KEY", ""),
+        "pinata_api_key": os.getenv("PINATA_API_KEY", ""),
         "pinata_secret_api_key": os.getenv("PINATA_SECRET_KEY", ""),
     }
     try:
@@ -350,3 +363,68 @@ def pinata_reachable() -> bool:
         return r.status_code == 200
     except Exception:
         return False
+
+
+def get_bundle_manifest() -> list:
+    """
+    Get manifest of documents in the bundle.
+    Returns list of document information.
+    """
+    from core.config import LAZARUS_DIR
+
+    bundle_dir = LAZARUS_DIR / "bundle"
+    manifest = []
+
+    if bundle_dir.exists():
+        for file_path in bundle_dir.glob("*"):
+            if file_path.is_file():
+                manifest.append(
+                    {
+                        "filename": file_path.name,
+                        "size": file_path.stat().st_size,
+                        "modified": file_path.stat().st_mtime,
+                        "type": file_path.suffix.lstrip(".").upper() or "OTHER",
+                    }
+                )
+
+    return manifest
+
+
+def add_document_to_bundle(file_path: str, document_type: str = "OTHER") -> dict:
+    """
+    Add a document to the bundle.
+    Returns information about the added document.
+    """
+    from core.config import LAZARUS_DIR
+    import shutil
+
+    source_path = Path(file_path)
+    if not source_path.exists():
+        raise FileNotFoundError(f"Source file not found: {file_path}")
+
+    bundle_dir = LAZARUS_DIR / "bundle"
+    bundle_dir.mkdir(parents=True, exist_ok=True)
+
+    dest_path = bundle_dir / source_path.name
+    shutil.copy2(source_path, dest_path)
+
+    return {
+        "filename": dest_path.name,
+        "size": dest_path.stat().st_size,
+        "type": document_type,
+        "added": dest_path.stat().st_mtime,
+    }
+
+
+def remove_document_from_bundle(filename: str) -> bool:
+    """
+    Remove a document from the bundle.
+    Returns True if successful, False if file not found.
+    """
+    from core.config import LAZARUS_DIR
+
+    file_path = LAZARUS_DIR / "bundle" / filename
+    if file_path.exists():
+        file_path.unlink()
+        return True
+    return False

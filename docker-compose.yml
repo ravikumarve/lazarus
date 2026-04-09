@@ -1,0 +1,83 @@
+version: '3.8'
+
+services:
+  lazarus:
+    build:
+      context: .
+      target: production
+    ports:
+      - "8000:8000"
+      - "8080:8080"
+    environment:
+      - LAZARUS_PORT=8000
+      - LAZARUS_HOST=0.0.0.0
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+    volumes:
+      - lazarus_data:/app/data
+      - lazarus_config:/app/config
+      - lazarus_logs:/app/logs
+      - ./env.example:/app/.env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  lazarus-dev:
+    build:
+      context: .
+      target: development
+    ports:
+      - "8001:8000"
+      - "8081:8080"
+    environment:
+      - LAZARUS_PORT=8000
+      - LAZARUS_HOST=0.0.0.0
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+    volumes:
+      - .:/app
+      - lazarus_data:/app/data
+      - lazarus_config:/app/config
+      - lazarus_logs:/app/logs
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+
+  lazarus-https:
+    build:
+      context: .
+      target: production
+    ports:
+      - "8443:8000"
+    environment:
+      - LAZARUS_PORT=8000
+      - LAZARUS_HOST=0.0.0.0
+      - LAZARUS_SSL_CERT_FILE=/app/ssl/cert.pem
+      - LAZARUS_SSL_KEY_FILE=/app/ssl/key.pem
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+    volumes:
+      - lazarus_data:/app/data
+      - lazarus_config:/app/config
+      - lazarus_logs:/app/logs
+      - ./ssl:/app/ssl:ro
+      - ./env.example:/app/.env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-k", "-f", "https://localhost:8000/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  lazarus_data:
+    driver: local
+  lazarus_config:
+    driver: local
+  lazarus_logs:
+    driver: local

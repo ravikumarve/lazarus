@@ -1,33 +1,64 @@
-<h1 align="center">⚰️ Lazarus Protocol</h1>
+<h1 align="center">
+  <img src="https://raw.githubusercontent.com/ravikumarve/lazarus/main/assets/lazarus-banner.png" alt="Lazarus Protocol" width="600"/>
+</h1>
 
 <p align="center">
-  <strong>Your crypto secrets survive you — self-hosted dead man's switch for digital asset holders</strong>
+  <strong>Your Digital Legacy, Preserved. Self-Hosted Dead Man's Switch for Crypto Holders.</strong>
 </p>
 
 <p align="center">
-  <a href="https://github.com/ravikumarve/lazarus/stargazers">
-    <img src="https://img.shields.io/github/stars/ravikumarve/lazarus?style=social" alt="GitHub stars" />
+  <!-- Security & Encryption -->
+  <a href="SECURITY.md">
+    <img src="https://img.shields.io/badge/Security-Military%20Grade-8b0000?style=for-the-badge&logo=shield-check" alt="Military Grade Security" />
   </a>
-  <a href="https://github.com/ravikumarve/lazarus/blob/main/LICENSE">
-    <img src="https://img.shields.io/github/license/ravikumarve/lazarus" alt="License" />
+  <a href="SECURITY.md">
+    <img src="https://img.shields.io/badge/Encryption-AES--256%20%2B%20RSA--4096-8b0000?style=for-the-badge&logo=key" alt="Military Encryption" />
+  </a>
+  
+  <!-- Platform Support -->
+  <a href="README.md#platform-support">
+    <img src="https://img.shields.io/badge/Windows-Supported-8b0000?style=for-the-badge&logo=windows" alt="Windows Support" />
+  </a>
+  <a href="README.md#platform-support">
+    <img src="https://img.shields.io/badge/Linux-Supported-8b0000?style=for-the-badge&logo=linux" alt="Linux Support" />
+  </a>
+  <a href="README.md#platform-support">
+    <img src="https://img.shields.io/badge/macOS-Supported-8b0000?style=for-the-badge&logo=apple" alt="macOS Support" />
+  </a>
+  
+  <!-- Deployment -->
+  <a href="README.md#docker-deployment">
+    <img src="https://img.shields.io/badge/Docker-Ready-8b0000?style=for-the-badge&logo=docker" alt="Docker Ready" />
+  </a>
+  <a href="README.md#https-support">
+    <img src="https://img.shields.io/badge/HTTPS-Supported-8b0000?style=for-the-badge&logo=lock" alt="HTTPS Support" />
+  </a>
+  
+  <!-- Project Status -->
+  <a href="https://github.com/ravikumarve/lazarus/stargazers">
+    <img src="https://img.shields.io/github/stars/ravikumarve/lazarus?style=for-the-badge&logo=github&color=8b0000" alt="GitHub stars" />
   </a>
   <a href="https://pypi.org/project/lazarus-protocol/">
-    <img src="https://img.shields.io/pypi/v/lazarus-protocol" alt="PyPI version" />
+    <img src="https://img.shields.io/pypi/v/lazarus-protocol?style=for-the-badge&logo=pypi&logoColor=white&color=8b0000" alt="PyPI version" />
   </a>
   <a href="https://www.python.org/">
-    <img src="https://img.shields.io/badge/python-3.10+-blue?logo=python&logoColor=white" alt="Python version" />
+    <img src="https://img.shields.io/badge/python-3.10+-8b0000?style=for-the-badge&logo=python&logoColor=white" alt="Python version" />
+  </a>
+  <a href="https://github.com/ravikumarve/lazarus/blob/main/LICENSE">
+    <img src="https://img.shields.io/github/license/ravikumarve/lazarus?style=for-the-badge&logo=opensourceinitiative&color=8b0000" alt="License" />
   </a>
   <a href="https://github.com/ravikumarve/lazarus/actions">
-    <img src="https://img.shields.io/github/actions/workflow/status/ravikumarve/lazarus/ci.yml" alt="Build Status" />
+    <img src="https://img.shields.io/github/actions/workflow/status/ravikumarve/lazarus/ci.yml?style=for-the-badge&logo=githubactions&label=build" alt="Build Status" />
   </a>
   <a href="https://github.com/ravikumarve/lazarus/issues">
-    <img src="https://img.shields.io/github/issues/ravikumarve/lazarus" alt="Open Issues" />
+    <img src="https://img.shields.io/github/issues/ravikumarve/lazarus?style=for-the-badge&logo=github&color=8b0000" alt="Open Issues" />
   </a>
 </p>
 
 <p align="center">
-  <strong>📺 Demo Coming Soon</strong><br/>
-  <em>See <a href="assets/demo-instructions.md">demo creation guide</a> for details</em>
+  <img src="https://raw.githubusercontent.com/ravikumarve/lazarus/main/assets/dashboard-preview.png" alt="Lazarus Dashboard" width="800"/>
+  <br/>
+  <em>Professional Web Dashboard with Dark/Light Theme Support</em>
 </p>
 
 ---
@@ -38,66 +69,102 @@
 
 **No middlemen. No cloud services. No trust required.** Your secrets stay encrypted until delivery, and the entire system runs on your own hardware.
 
-## 🚀 Features That Protect Your Legacy
+## 🚀 Enterprise-Grade Features
 
-- **🔐 Military-Grade Encryption**: AES-256-GCM + RSA-4096 hybrid encryption — your secrets stay encrypted until delivery
-- **⏰ Automated Heartbeat Monitoring**: Background agent checks if you're active and triggers alerts if you miss check-ins
-- **📧 Multi-Channel Alerts**: Email (SendGrid) + Telegram notifications with escalating urgency
-- **🛡️ Self-Hosted Security**: No cloud dependencies — your data never leaves your control
-- **💻 Cross-Platform**: Full Windows, Linux, and macOS support with identical security guarantees
-- **⚡ Production Ready**: Systemd service integration for 24/7 reliability
-- **🧪 Comprehensive Testing**: 20+ passing tests covering all critical functionality
+### 🔐 **Security & Encryption**
+- **Military-Grade Encryption**: AES-256-GCM + RSA-4096 hybrid encryption
+- **Zero-Knowledge Architecture**: Your secrets stay encrypted until delivery
+- **Windows Security**: POSIX `chmod 0o600` equivalent with 3-tier fallback system
+- **HTTPS/TLS Support**: Production-ready SSL/TLS encryption
 
-## 📦 Quick Start (30 Seconds to Safety)
+### ⚡ **Reliability & Monitoring**
+- **Automated Heartbeat**: Background agent with configurable check-in intervals
+- **Multi-Channel Alerts**: Email (SendGrid) + Telegram notifications with escalation
+- **24/7 Operation**: Systemd service integration for production reliability
+- **Health Monitoring**: Built-in health checks and status endpoints
 
-### Option 1: Install from PyPI (Recommended)
+### 🌐 **Access & Management**
+- **Web Dashboard**: Professional React-inspired interface with dark/light themes
+- **RESTful API**: Comprehensive API for integration and automation
+- **CLI Interface**: Full command-line control with intuitive commands
+- **Mobile Responsive**: Optimized for desktop and mobile devices
+
+### 📦 **Deployment & Operations**
+- **Docker Ready**: Multi-stage Docker builds with production optimization
+- **Cross-Platform**: Windows, Linux, macOS with identical security guarantees
+- **Self-Hosted**: No cloud dependencies — your data never leaves your control
+- **IPFS Integration**: Decentralized storage with local fallback
+
+### 🧪 **Quality & Testing**
+- **Comprehensive Testing**: 20+ passing tests covering all critical functionality
+- **Type Hints**: Full codebase with modern Python type annotations
+- **Code Quality**: ruff, black, and mypy for consistent code style
+- **Documentation**: Comprehensive guides for development and production
+
+## 🚀 Quick Start (Choose Your Path)
+
+### 🐍 **Python Package (Recommended)**
 ```bash
-# Install the latest stable release
+# Install from PyPI
 pip install lazarus-protocol
 
-# Or install with specific version
-pip install lazarus-protocol==0.1.0
+# Initialize and configure
+lazarus init
+lazarus setup
 
-# For development/testing, install from GitHub
-pip install git+https://github.com/ravikumarve/lazarus.git
+# Start the web dashboard
+lazarus dashboard
+
+# Or run as service
+lazarus run --daemon
 ```
 
-### Option 2: Install via Docker
+### 🐳 **Docker Container**
 ```bash
-# Pull the latest Docker image
-docker pull ghcr.io/ravikumarve/lazarus:latest
+# Using Docker Compose (Production Ready)
+git clone https://github.com/ravikumarve/lazarus.git
+cd lazarus
 
-# Run Lazarus Protocol
-docker run -it --rm \
-  -v $(pwd)/config:/app/config \
-  -v $(pwd)/data:/app/data \
-  -p 8000:8000 \
-  ghcr.io/ravikumarve/lazarus:latest \
-  lazarus init
+docker-compose up -d
 
-# Or use Docker Compose
-echo 'version: "3.8"
-services:
-  lazarus:
-        image: ghcr.io/ravikumarve/lazarus:latest
-    container_name: lazarus-protocol
-    restart: unless-stopped
-    volumes:
-      - ./config:/app/config
-      - ./data:/app/data
-    ports:
-      - "8000:8000"
-    environment:
-      - LAZARUS_HOME=/app
-      - PYTHONUNBUFFERED=1
-' > docker-compose.yml
+# Access dashboard: http://localhost:8000
 
-docker compose up -d
+# Or run individual commands
+docker-compose exec lazarus lazarus status
+docker-compose exec lazarus lazarus ping
 ```
 
-### Option 3: Install from Source
+### 🔧 **From Source**
 ```bash
-# Clone the repository
+# Clone and install
+git clone https://github.com/ravikumarve/lazarus.git
+cd lazarus
+
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate
+
+# Install with development dependencies
+pip install -e .[dev]
+
+# Run tests to verify installation
+pytest tests/ -v
+
+# Start the protocol
+python -m cli.main init
+python -m cli.main setup
+python -m web.server
+```
+
+### ⚡ **One-Line Install**
+```bash
+# Quick start with Docker
+curl -sSL https://raw.githubusercontent.com/ravikumarve/lazarus/main/docker-compose.yml > docker-compose.yml \
+  && docker-compose up -d
+
+# Or with Python
+pip install lazarus-protocol && lazarus init && lazarus setup && lazarus dashboard
+```
 git clone https://github.com/ravikumarve/lazarus.git
 cd lazarus
 
@@ -281,26 +348,37 @@ lazarus/
 | Early trigger accident | Escalation ladder + freeze | ✅ **Active** |
 | Forget to check in | Daily reminders + alerts | ✅ **Active** |
 
-## 📊 Status
+## 📊 Project Status: Production Ready 🚀
 
-### ✅ Completed Features
-- Core encryption engine (AES-256-GCM + RSA-4096)
-- Configuration system with secure storage
-- CLI framework with setup wizard
-- Heartbeat logic and escalation system
-- Manual check-in (ping command)
-- Email alert system (SendGrid integration)
-- Telegram alert system
-- Agent scheduler implementation
-- Beneficiary delivery system
-- Decryption kit generator
-- Comprehensive test suite (20+ tests)
+### ✅ **Completed & Production Ready**
+- **Core Security**: AES-256-GCM + RSA-4096 hybrid encryption engine
+- **Cross-Platform Support**: Windows, Linux, macOS with identical security
+- **Windows Permissions**: POSIX `chmod 0o600` equivalent with 3-tier fallback
+- **Web Dashboard**: Professional interface with dark/light theme support
+- **HTTPS/TLS Support**: Production-ready SSL/TLS encryption
+- **Docker Deployment**: Multi-stage builds with production optimization
+- **RESTful API**: Comprehensive API for integration and automation
+- **CLI Interface**: Full command-line control with intuitive commands
+- **Monitoring System**: Background agent with health checks
+- **Alert System**: Email (SendGrid) + Telegram notifications
+- **IPFS Integration**: Decentralized storage with local fallback
+- **Testing Suite**: 20+ comprehensive tests covering all functionality
+- **Documentation**: Complete guides for development and production
 
-### 🚧 In Progress
-- IPFS storage layer for redundancy
-- Multi-platform packaging
-- Desktop GUI application
-- Security audit and penetration testing
+### 🎯 **Recently Enhanced**
+- **Web UI Overhaul**: Modern React-inspired dashboard with responsive design
+- **SSL/TLS Support**: Environment-based certificate configuration
+- **Docker Compose**: Production-ready deployment configurations
+- **Windows Security**: Complete permissions implementation
+- **Production Guides**: Comprehensive deployment documentation
+- **Error Handling**: Robust error recovery and graceful degradation
+
+### 📈 **Next Enhancements**
+- Mobile application companion
+- Advanced analytics dashboard
+- Multi-user support
+- Kubernetes operator
+- Hardware security module (HSM) integration
 
 ## 🐛 Troubleshooting
 
@@ -518,6 +596,32 @@ import rich
 print('✅ All dependencies installed successfully')
 "
 ```
+
+## 🆕 What's New in Lazarus Protocol
+
+### ✨ Latest Enhancements
+
+| Feature | Status | Description |
+|---------|--------|-------------|
+| **Web Dashboard** | ✅ Production Ready | Modern React-inspired interface with dark/light themes |
+| **HTTPS/TLS Support** | ✅ Production Ready | SSL certificate configuration for secure deployments |
+| **Docker Compose** | ✅ Production Ready | Multi-service deployment with production optimization |
+| **Windows Security** | ✅ Production Ready | Complete file permissions equivalent to POSIX 0o600 |
+| **Error Recovery** | ✅ Enhanced | Robust error handling with graceful degradation |
+| **Mobile Responsive** | ✅ Complete | Optimized for desktop and mobile devices |
+
+### 🏆 Feature Comparison
+
+| Feature | Lazarus Protocol | Alternatives |
+|---------|------------------|-------------|
+| **Self-Hosted** | ✅ Yes | ❌ Most are cloud-based |
+| **Zero Knowledge** | ✅ Yes | ❌ Many require trust |
+| **Open Source** | ✅ Yes | ❌ Many are proprietary |
+| **Cross-Platform** | ✅ Windows/Linux/macOS | ⚠️ Limited platforms |
+| **Military Encryption** | ✅ AES-256 + RSA-4096 | ⚠️ Varies by provider |
+| **No Monthly Fees** | ✅ Free forever | ❌ Subscription models |
+| **IPFS Support** | ✅ Yes | ❌ Rarely supported |
+| **Multi-Channel Alerts** | ✅ Email + Telegram | ⚠️ Usually single channel |
 
 ## 📜 License
 
