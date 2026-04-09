@@ -1,0 +1,99 @@
+[build-system]
+requires = ["setuptools>=61.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lazarus-protocol"
+description = "Self-hosted dead man's switch for crypto holders"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {file = "LICENSE"}
+authors = [
+    {name = "Ravi Kumar", email = "ravi@example.com"}
+]
+keywords = [
+    "security", "cryptocurrency", "dead-man-switch", 
+    "encryption", "backup", "crypto-wallet", "self-hosted"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
+    "Topic :: Security :: Cryptography",
+    "Topic :: System :: Archiving :: Backup",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: OS Independent",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: MacOS :: MacOS X",
+    "Environment :: Console",
+    "Natural Language :: English",
+]
+dependencies = [
+    "cryptography>=41.0.0",
+    "pycryptodome>=3.19.0",
+    "click>=8.1.7",
+    "rich>=13.6.0",
+    "questionary>=2.0.1",
+    "APScheduler>=3.10.4",
+    "requests>=2.31.0",
+    "sendgrid>=6.11.0",
+    "python-telegram-bot>=20.6",
+    "python-dotenv>=1.0.0",
+    "pydantic>=2.4.0",
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "ruff>=0.1.0",
+    "black>=23.0.0",
+]
+windows = [
+    "pywin32>=306; sys_platform == 'win32'",
+]
+
+[project.urls]
+Homepage = "https://github.com/yourusername/lazarus-protocol"
+Documentation = "https://github.com/yourusername/lazarus-protocol#readme"
+Issues = "https://github.com/yourusername/lazarus-protocol/issues"
+
+[project.scripts]
+lazarus = "cli.main:cli"
+
+[tool.setuptools]
+package-data = {"*" = ["*.md", "*.txt", "*.yaml", "*.yml", "*.json"]}
+
+[tool.setuptools.packages.find]
+exclude = ["tests", "tests.*", "examples", "examples.*"]
+
+[tool.black]
+line-length = 88
+target-version = ["py310"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+select = ["E", "F", "W", "I"]
+ignore = ["E501"]
+
+[tool.ruff.per-file-ignores]
+"__init__.py" = ["F401"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v"
+
+[tool.coverage.run]
+source = ["lazarus_protocol"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true

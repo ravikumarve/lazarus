@@ -1,0 +1,61 @@
+# Include README and license
+include LICENSE
+include README.md
+include CHANGELOG.md
+include CONTRIBUTING.md
+include QUICKSTART.md
+
+# Include configuration files
+include *.env.example
+include *.yaml
+include *.yml
+include *.json
+
+# Include package data
+recursive-include lazarus_protocol *.md
+recursive-include lazarus_protocol *.txt
+recursive-include lazarus_protocol *.json
+recursive-include lazarus_protocol *.yaml
+recursive-include lazarus_protocol *.yml
+
+# Include documentation
+recursive-include docs *.md
+recursive-include docs *.rst
+
+# Include tests (for source distributions)
+recursive-include tests *.py
+
+# Include examples
+recursive-include examples *.py
+
+# Include assets
+recursive-include assets *
+recursive-include web/static *
+
+# Exclude development files
+exclude .gitignore
+exclude .dockerignore
+exclude Dockerfile
+exclude .github/workflows/*
+exclude .github/*
+exclude .vscode/*
+exclude .idea/*
+
+# Exclude build artifacts
+exclude build/*
+exclude dist/*
+exclude *.egg-info/*
+exclude __pycache__/*
+exclude *.pyc
+exclude *.pyo
+exclude .pytest_cache/*
+exclude .ruff_cache/*
+
+# Exclude virtual environments
+exclude venv/*
+exclude .venv/*
+exclude env/*
+
+# Exclude system-specific files
+exclude *.service
+exclude *.sh

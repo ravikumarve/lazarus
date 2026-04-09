@@ -6,6 +6,7 @@ Called by `lazarus init`. Uses questionary for prompts and Rich for display.
 
 from __future__ import annotations
 
+import os
 import re
 import questionary
 from pathlib import Path
@@ -14,6 +15,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from core.config import BeneficiaryConfig, VaultConfig, LazarusConfig, save_config
+from core.encryption import encrypt_file, load_public_key_from_file
 
 console = Console()
 
@@ -54,7 +56,7 @@ def run_setup_wizard() -> None:
 
     # Step 7 — Encrypt
     console.print("\n[bold yellow]🔐 Encrypting your secret file...[/bold yellow]")
-    encrypted_file_path, key_blob = _encrypt_secret_file(secret_path)
+    encrypted_file_path, key_blob = _encrypt_secret_file(secret_path, beneficiary)
 
     # Step 8 — IPFS (optional)
     ipfs_cid = _prompt_ipfs_upload()
@@ -238,19 +240,34 @@ def _prompt_telegram() -> str | None:
     ).ask()
 
 
-def _encrypt_secret_file(secret_path: Path) -> tuple[str, str]:
+def _encrypt_secret_file(
+    secret_path: Path, beneficiary: BeneficiaryConfig
+) -> tuple[str, str]:
     """Encrypt the secret file and return (encrypted_path, key_blob)."""
-    # For now, create a stub implementation
-    encrypted_path = secret_path.with_suffix(".encrypted")
-    key_blob = "dummy_key_blob_for_now"
+    console.print(
+        f"[dim]Loading beneficiary's public key from: {beneficiary.public_key_path}[/dim]"
+    )
 
-    # Simulate encryption by copying the file
-    import shutil
+    # Load the beneficiary's public key
+    try:
+        public_key_pem = load_public_key_from_file(Path(beneficiary.public_key_path))
+    except Exception as e:
+        console.print(f"[red]❌ Failed to load public key: {e}[/red]")
+        raise
 
-    shutil.copy2(secret_path, encrypted_path)
+    # Encrypt the file using the beneficiary's public key
+    try:
+        encrypted_path, key_blob = encrypt_file(
+            plaintext_path=secret_path,
+            recipient_public_key_pem=public_key_pem,
+            output_dir=secret_path.parent,  # Save encrypted file in same directory
+        )
 
-    console.print(f"[green]✓ Encrypted file saved to: {encrypted_path}[/green]")
-    return str(encrypted_path), key_blob
+        console.print(f"[green]✓ Encrypted file saved to: {encrypted_path}[/green]")
+        return str(encrypted_path), key_blob
+    except Exception as e:
+        console.print(f"[red]❌ Encryption failed: {e}[/red]")
+        raise
 
 
 def _prompt_ipfs_upload() -> str | None:
