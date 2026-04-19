@@ -1,3 +1,3 @@
 """
-Lazarus Core — encryption, storage, and config management.
+Lazarus Core — encryption, storage, config management, and license validation.
 """

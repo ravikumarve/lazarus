@@ -121,6 +121,13 @@ def root():
     return FileResponse(html_path, media_type="text/html")
 
 
+@app.get("/pricing")
+def pricing():
+    """Serve the pricing HTML page."""
+    html_path = Path(__file__).parent / "pricing.html"
+    return FileResponse(html_path, media_type="text/html")
+
+
 @app.get("/status")
 def status():
     """Get current Lazarus status."""
@@ -271,6 +278,25 @@ def remove_document(filename: str):
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/{full_path:path}")
+def catch_all(full_path: str):
+    """Catch-all route to handle undefined URLs and redirect to dashboard."""
+    # Special case: dashboard.html should redirect to dashboard
+    if full_path == "dashboard.html":
+        from fastapi.responses import RedirectResponse
+
+        return RedirectResponse(url="/")
+
+    # If it looks like a file request (has extension), return 404
+    if "." in full_path and len(full_path.split(".")[-1]) <= 5:
+        raise HTTPException(status_code=404, detail=f"Not found: {full_path}")
+
+    # Otherwise redirect to dashboard
+    from fastapi.responses import RedirectResponse
+
+    return RedirectResponse(url="/")
 
 
 if __name__ == "__main__":

@@ -61,9 +61,9 @@ windows = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/yourusername/lazarus-protocol"
-Documentation = "https://github.com/yourusername/lazarus-protocol#readme"
-Issues = "https://github.com/yourusername/lazarus-protocol/issues"
+Homepage = "https://github.com/ravikumarve/lazarus"
+Documentation = "https://github.com/ravikumarve/lazarus#readme"
+Issues = "https://github.com/ravikumarve/lazarus/issues"
 
 [project.scripts]
 lazarus = "cli.main:cli"
@@ -90,6 +90,9 @@ ignore = ["E501"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-v"
+markers = [
+    "integration: marks tests that require external services (deselect with '-m \"not integration\"')",
+]
 
 [tool.coverage.run]
 source = ["lazarus_protocol"]

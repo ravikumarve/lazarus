@@ -269,6 +269,55 @@ def encrypt_file(
     return encrypted_path, key_blob_b64
 
 
+def encrypt_and_store_file(
+    plaintext_path: Path,
+    recipient_public_key_pem: bytes,
+    output_dir: Path,
+    enable_ipfs: bool = True,
+) -> tuple[Path, str, Optional[str]]:
+    """
+    Enhanced encryption with optional IPFS storage.
+
+    Encrypts the file and optionally uploads to IPFS for redundancy.
+
+    Args:
+        plaintext_path:           Path to the file to encrypt.
+        recipient_public_key_pem: Beneficiary's RSA public key.
+        output_dir:               Directory for local storage.
+        enable_ipfs:              Whether to upload to IPFS.
+
+    Returns:
+        (encrypted_file_path, key_blob_base64, ipfs_cid)
+        ipfs_cid will be None if IPFS upload is disabled or fails.
+    """
+    from core.storage import upload_to_ipfs_with_fallback, StorageConfig
+
+    # First, encrypt the file locally
+    encrypted_path, key_blob_b64 = encrypt_file(
+        plaintext_path, recipient_public_key_pem, output_dir
+    )
+
+    ipfs_cid = None
+
+    # Optionally upload to IPFS for redundancy
+    if enable_ipfs:
+        try:
+            config = StorageConfig()
+            result = upload_to_ipfs_with_fallback(encrypted_path, config)
+
+            if result.provider != "local_filesystem":
+                ipfs_cid = result.cid
+                logger.info("File uploaded to IPFS with CID: %s", ipfs_cid)
+            else:
+                logger.warning("IPFS upload failed, using local fallback")
+
+        except Exception as exc:
+            logger.error("IPFS upload failed: %s", exc)
+            # Continue with local storage only
+
+    return encrypted_path, key_blob_b64, ipfs_cid
+
+
 # ---------------------------------------------------------------------------
 # File decryption
 # ---------------------------------------------------------------------------

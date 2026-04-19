@@ -94,6 +94,7 @@
 - **Cross-Platform**: Windows, Linux, macOS with identical security guarantees
 - **Self-Hosted**: No cloud dependencies — your data never leaves your control
 - **IPFS Integration**: Decentralized storage with local fallback
+- **License Validation**: Gumroad integration with subscription tier management
 
 ### 🧪 **Quality & Testing**
 - **Comprehensive Testing**: 20+ passing tests covering all critical functionality
@@ -603,6 +604,7 @@ print('✅ All dependencies installed successfully')
 
 | Feature | Status | Description |
 |---------|--------|-------------|
+| **Enhanced IPFS Storage** | ✅ Production Ready | Multi-provider support with automatic fallback and retry logic |
 | **Web Dashboard** | ✅ Production Ready | Modern React-inspired interface with dark/light themes |
 | **HTTPS/TLS Support** | ✅ Production Ready | SSL certificate configuration for secure deployments |
 | **Docker Compose** | ✅ Production Ready | Multi-service deployment with production optimization |
@@ -620,8 +622,9 @@ print('✅ All dependencies installed successfully')
 | **Cross-Platform** | ✅ Windows/Linux/macOS | ⚠️ Limited platforms |
 | **Military Encryption** | ✅ AES-256 + RSA-4096 | ⚠️ Varies by provider |
 | **No Monthly Fees** | ✅ Free forever | ❌ Subscription models |
-| **IPFS Support** | ✅ Yes | ❌ Rarely supported |
+| **IPFS Support** | ✅ Enhanced Multi-Provider | ❌ Rarely supported |
 | **Multi-Channel Alerts** | ✅ Email + Telegram | ⚠️ Usually single channel |
+| **Enhanced Storage** | ✅ Multi-provider + Fallback | ❌ Single provider |
 
 ## 📜 License
 
@@ -630,6 +633,7 @@ MIT License - see [LICENSE](LICENSE) file for details. You have full rights to u
 ## 🆘 Support
 
 - **Documentation**: [GitHub Wiki](https://github.com/ravikumarve/lazarus/wiki)
+- **IPFS Storage Guide**: [IPFS_STORAGE_GUIDE.md](IPFS_STORAGE_GUIDE.md)
 - **Issues**: [GitHub Issues](https://github.com/ravikumarve/lazarus/issues)
 - **Email**: ravikumarve@protonmail.com
 - **Security Issues**: Please report via email first

@@ -17,7 +17,7 @@ services:
       - lazarus_data:/app/data
       - lazarus_config:/app/config
       - lazarus_logs:/app/logs
-      - ./env.example:/app/.env
+      - ./.env.example:/app/.env
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/status"]
@@ -65,7 +65,7 @@ services:
       - lazarus_config:/app/config
       - lazarus_logs:/app/logs
       - ./ssl:/app/ssl:ro
-      - ./env.example:/app/.env
+      - ./.env.example:/app/.env
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-k", "-f", "https://localhost:8000/status"]

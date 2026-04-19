@@ -28,7 +28,7 @@ import stat
 import time
 from dataclasses import dataclass, asdict
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict, Any
 
 
 # ---------------------------------------------------------------------------
@@ -64,6 +64,20 @@ class VaultConfig:
 
 
 @dataclass
+class StorageProviderConfig:
+    """Configuration for storage providers."""
+
+    ipfs_api_url: Optional[str] = None
+    ipfs_gateway_url: Optional[str] = None
+    pinata_api_key: Optional[str] = None
+    pinata_secret_key: Optional[str] = None
+    web3_storage_token: Optional[str] = None
+    timeout: int = 30
+    max_retries: int = 3
+    enable_local_fallback: bool = True
+
+
+@dataclass
 class LazarusConfig:
     """Root configuration object. Serialised to ~/.lazarus/config.json."""
 
@@ -75,6 +89,11 @@ class LazarusConfig:
     last_checkin_timestamp: Optional[float] = None  # UTC epoch float
     telegram_chat_id: Optional[str] = None
     armed: bool = True
+    storage_config: Optional[StorageProviderConfig] = None
+    license_key: Optional[str] = None  # Gumroad license key
+    subscription_tier: str = "free"  # free/paid tier
+    wallet_limit: int = 1  # maximum wallets for tier
+    license_valid_until: Optional[float] = None  # UTC timestamp when license expires
 
 
 # ---------------------------------------------------------------------------
@@ -103,6 +122,21 @@ def _config_from_dict(d: dict) -> LazarusConfig:
         ipfs_cid=vault_d.get("ipfs_cid"),
     )
 
+    # Handle storage configuration (backward compatible)
+    storage_config = None
+    if "storage_config" in d:
+        storage_d = d["storage_config"]
+        storage_config = StorageProviderConfig(
+            ipfs_api_url=storage_d.get("ipfs_api_url"),
+            ipfs_gateway_url=storage_d.get("ipfs_gateway_url"),
+            pinata_api_key=storage_d.get("pinata_api_key"),
+            pinata_secret_key=storage_d.get("pinata_secret_key"),
+            web3_storage_token=storage_d.get("web3_storage_token"),
+            timeout=storage_d.get("timeout", 30),
+            max_retries=storage_d.get("max_retries", 3),
+            enable_local_fallback=storage_d.get("enable_local_fallback", True),
+        )
+
     return LazarusConfig(
         owner_name=d["owner_name"],
         owner_email=d["owner_email"],
@@ -112,6 +146,11 @@ def _config_from_dict(d: dict) -> LazarusConfig:
         last_checkin_timestamp=d.get("last_checkin_timestamp"),
         telegram_chat_id=d.get("telegram_chat_id"),
         armed=d.get("armed", True),
+        storage_config=storage_config,
+        license_key=d.get("license_key"),
+        subscription_tier=d.get("subscription_tier", "free"),
+        wallet_limit=d.get("wallet_limit", 1),
+        license_valid_until=d.get("license_valid_until"),
     )
 
 
