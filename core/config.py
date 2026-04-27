@@ -124,7 +124,7 @@ def _config_from_dict(d: dict) -> LazarusConfig:
 
     # Handle storage configuration (backward compatible)
     storage_config = None
-    if "storage_config" in d:
+    if "storage_config" in d and d["storage_config"] is not None:
         storage_d = d["storage_config"]
         storage_config = StorageProviderConfig(
             ipfs_api_url=storage_d.get("ipfs_api_url"),
