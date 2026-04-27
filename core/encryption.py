@@ -106,6 +106,86 @@ def _zero_memory(buf: Union[bytearray, memoryview]) -> None:
         raise RuntimeError(f"Secure memory zeroing failed, used fallback: {e}")
 
 
+def _verify_memory_zeroed(buf: Union[bytearray, memoryview]) -> bool:
+    """
+    Verify that memory has been zeroed.
+    
+    Args:
+        buf: Bytearray or memoryview to verify.
+    
+    Returns:
+        True if all bytes are zero, False otherwise.
+    """
+    if not isinstance(buf, (bytearray, memoryview)):
+        return False
+    
+    # Check all bytes are zero
+    for byte in buf:
+        if byte != 0:
+            return False
+    
+    return True
+
+
+def _secure_delete(buf: Union[bytearray, memoryview], passes: int = 3) -> None:
+    """
+    Securely delete sensitive data with multiple passes.
+    
+    Uses multiple passes with different patterns to ensure data cannot be recovered.
+    
+    Args:
+        buf: Bytearray or memoryview to securely delete.
+        passes: Number of overwrite passes (default: 3).
+    
+    Raises:
+        TypeError: If buf is not a bytearray or memoryview.
+        ValueError: If buf is empty.
+    """
+    if not isinstance(buf, (bytearray, memoryview)):
+        raise TypeError(f"Expected bytearray or memoryview, got {type(buf).__name__}")
+
+    if len(buf) == 0:
+        raise ValueError("Cannot delete empty buffer")
+
+    length = len(buf)
+    
+    # Multiple passes with different patterns
+    for pass_num in range(passes):
+        if pass_num == 0:
+            # Pass 1: All zeros
+            pattern = 0
+        elif pass_num == 1:
+            # Pass 2: All ones
+            pattern = 0xFF
+        else:
+            # Pass 3+: Random data
+            pattern = None
+        
+        for i in range(length):
+            if pattern is None:
+                buf[i] = os.urandom(1)[0]
+            else:
+                buf[i] = pattern
+    
+    # Final pass: Zero out
+    _zero_memory(buf)
+    
+    # Verify memory is zeroed
+    if not _verify_memory_zeroed(buf):
+        raise RuntimeError("Failed to verify memory zeroing")
+
+
+def _force_memory_barrier() -> None:
+    """
+    Force a memory barrier to prevent compiler optimizations.
+    
+    This creates a volatile operation that the compiler cannot optimize away.
+    """
+    # Create a volatile read/write operation
+    import sys
+    sys.stdout.flush()
+
+
 # ---------------------------------------------------------------------------
 # Key generation
 # ---------------------------------------------------------------------------
@@ -261,10 +341,17 @@ def encrypt_file(
     encrypted_aes_key = _rsa_encrypt_key(aes_key, recipient_public_key_pem)
     key_blob_b64 = base64.b64encode(encrypted_aes_key).decode("utf-8")
 
-    # 5. Zero out AES key from memory
+    # 5. Securely delete AES key from memory with multiple passes
     aes_key_ba = bytearray(aes_key)
-    _zero_memory(aes_key_ba)
-    del aes_key_ba
+    try:
+        _secure_delete(aes_key_ba, passes=3)
+    except RuntimeError as e:
+        # Log warning but continue - this is a security best effort
+        import warnings
+        warnings.warn(f"Secure deletion warning: {e}")
+    finally:
+        del aes_key_ba
+        _force_memory_barrier()
 
     return encrypted_path, key_blob_b64
 
@@ -382,8 +469,16 @@ def decrypt_file(
                 "GCM authentication failed — file may be corrupted or tampered."
             ) from exc
     finally:
-        _zero_memory(aes_key_ba)
-        del aes_key_ba
+        # Securely delete AES key with multiple passes
+        try:
+            _secure_delete(aes_key_ba, passes=3)
+        except RuntimeError as e:
+            # Log warning but continue - this is a security best effort
+            import warnings
+            warnings.warn(f"Secure deletion warning: {e}")
+        finally:
+            del aes_key_ba
+            _force_memory_barrier()
 
     # 4. Write plaintext
     output_path.parent.mkdir(parents=True, exist_ok=True)

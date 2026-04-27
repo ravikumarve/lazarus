@@ -122,8 +122,13 @@ def _prompt_owner_email() -> str:
 
 
 def _validate_email(email: str) -> bool:
-    """Validate email format using regex pattern."""
-    return bool(re.match(r"^[^@]+@[^@]+\.[^@]+$", email))
+    """Validate email format using RFC 5322 compliant regex pattern."""
+    if not email or len(email) > 254:
+        return False
+    
+    # RFC 5322 compliant email regex
+    pattern = r"^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$"
+    return bool(re.match(pattern, email))
 
 
 def _prompt_beneficiary() -> BeneficiaryConfig:
@@ -154,13 +159,35 @@ def _prompt_beneficiary() -> BeneficiaryConfig:
 
 
 def _validate_public_key_file(path: Path) -> bool:
-    """Validate that the public key file exists and looks like a valid RSA key."""
+    """Validate that the public key file exists, is safe, and looks like a valid RSA key."""
     if not path.exists():
         return "Public key file does not exist"
     if not path.is_file():
         return "Path is not a file"
+    
+    # Check for path traversal attempts
+    if ".." in str(path):
+        return "Path traversal detected"
+    
+    # Check file size
     if path.stat().st_size > 1024 * 1024:  # 1MB max
         return "File is too large for a public key"
+    
+    # Check file is within allowed directories
+    allowed_dirs = [Path.home(), Path.cwd()]
+    try:
+        resolved = path.resolve()
+        is_allowed = False
+        for allowed in allowed_dirs:
+            allowed_resolved = allowed.resolve()
+            if resolved == allowed_resolved or str(resolved).startswith(str(allowed_resolved)):
+                is_allowed = True
+                break
+        
+        if not is_allowed:
+            return "File not in allowed directories"
+    except (OSError, RuntimeError) as e:
+        return f"Invalid path: {e}"
 
     try:
         content = path.read_text()
@@ -186,15 +213,40 @@ def _prompt_secret_file() -> Path:
 
 
 def _validate_secret_file(path: Path) -> bool:
-    """Validate secret file exists and is reasonable size."""
+    """Validate secret file exists, is safe, and is reasonable size."""
     if not path.exists():
         return "File does not exist"
     if not path.is_file():
         return "Path is not a file"
+    
+    # Check for path traversal attempts
+    if ".." in str(path):
+        return "Path traversal detected"
+    
+    # Check file size
     if path.stat().st_size > 50 * 1024 * 1024:  # 50MB max
         return "File is too large (max 50MB)"
+    
+    # Check file is readable
     if not os.access(path, os.R_OK):
         return "File is not readable"
+    
+    # Check file is within allowed directories
+    allowed_dirs = [Path.home(), Path.cwd()]
+    try:
+        resolved = path.resolve()
+        is_allowed = False
+        for allowed in allowed_dirs:
+            allowed_resolved = allowed.resolve()
+            if resolved == allowed_resolved or str(resolved).startswith(str(allowed_resolved)):
+                is_allowed = True
+                break
+        
+        if not is_allowed:
+            return "File not in allowed directories"
+    except (OSError, RuntimeError) as e:
+        return f"Invalid path: {e}"
+    
     return True
 
 
