@@ -1,0 +1,1520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚰️</text></svg>">
+    <title>Lazarus Protocol Dashboard</title>
+    <style>
+        :root {
+            --primary-color: #0f172a;
+            --secondary-color: #1e293b;
+            --accent-color: #dc2626;
+            --success-color: #16a34a;
+            --warning-color: #eab308;
+            --danger-color: #dc2626;
+            --text-color: #f8fafc;
+            --text-muted: #94a3b8;
+            --border-color: #334155;
+            --card-bg: #1e293b;
+            --hover-color: #2d3748;
+            --gradient-start: #dc2626;
+            --gradient-end: #ea580c;
+            --shadow: 0 10px 25px -3px rgba(0, 0, 0, 0.3);
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        [data-theme="light"] {
+            --primary-color: #ffffff;
+            --secondary-color: #f8fafc;
+            --accent-color: #dc2626;
+            --success-color: #16a34a;
+            --warning-color: #eab308;
+            --danger-color: #dc2626;
+            --text-color: #0f172a;
+            --text-muted: #64748b;
+            --border-color: #e2e8f0;
+            --card-bg: #ffffff;
+            --hover-color: #f1f5f9;
+            --shadow: 0 10px 25px -3px rgba(0, 0, 0, 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            color: var(--text-color);
+            line-height: 1.6;
+            padding: 0;
+            margin: 0;
+            min-height: 100vh;
+            transition: var(--transition);
+        }
+
+        .app-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding: 40px 20px;
+            background: linear-gradient(135deg, var(--gradient-start) 0%, var(--gradient-end) 100%);
+            border-radius: 16px;
+            box-shadow: var(--shadow);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+            opacity: 0.1;
+        }
+
+        .header h1 {
+            font-size: 3rem;
+            font-weight: 800;
+            color: white;
+            margin-bottom: 12px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+            position: relative;
+        }
+
+        .header p {
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 1.2rem;
+            font-weight: 400;
+            margin-bottom: 20px;
+            position: relative;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            flex-wrap: wrap;
+            position: relative;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 24px;
+            margin-bottom: 40px;
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border-radius: 16px;
+            padding: 24px;
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow);
+            transition: var(--transition);
+            backdrop-filter: blur(10px);
+        }
+
+        .card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.4);
+        }
+
+        .card h2 {
+            color: var(--accent-color);
+            margin-bottom: 20px;
+            font-size: 1.4rem;
+            font-weight: 600;
+            border-bottom: 2px solid var(--border-color);
+            padding-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .card h2::before {
+            content: '';
+            width: 4px;
+            height: 20px;
+            background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+            border-radius: 2px;
+        }
+
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            padding: 12px 16px;
+            background-color: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            transition: var(--transition);
+        }
+
+        .status-item:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+            transform: translateX(4px);
+        }
+
+        .status-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .status-label {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+            font-weight: 500;
+        }
+
+        .status-value {
+            font-weight: 600;
+            font-size: 1rem;
+        }
+
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .status-armed {
+            background-color: rgba(220, 38, 38, 0.2);
+            color: var(--danger-color);
+            border: 1px solid rgba(220, 38, 38, 0.3);
+        }
+
+        .status-disarmed {
+            background-color: rgba(22, 163, 74, 0.2);
+            color: var(--success-color);
+            border: 1px solid rgba(22, 163, 74, 0.3);
+        }
+
+        .status-running {
+            background-color: rgba(22, 163, 74, 0.2);
+            color: var(--success-color);
+            border: 1px solid rgba(22, 163, 74, 0.3);
+        }
+
+        .status-stopped {
+            background-color: rgba(220, 38, 38, 0.2);
+            color: var(--danger-color);
+            border: 1px solid rgba(220, 38, 38, 0.3);
+        }
+
+        .status-critical {
+            background-color: rgba(220, 38, 38, 0.3);
+            color: var(--danger-color);
+            border: 1px solid rgba(220, 38, 38, 0.5);
+            animation: pulse 2s infinite;
+        }
+
+        .status-warning {
+            background-color: rgba(234, 179, 8, 0.2);
+            color: var(--warning-color);
+            border: 1px solid rgba(234, 179, 8, 0.3);
+        }
+
+        .btn {
+            padding: 14px 24px;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 600;
+            transition: var(--transition);
+            margin: 4px;
+            min-width: 140px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        .btn:hover::before {
+            left: 100%;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+            color: white;
+            box-shadow: 0 4px 15px rgba(220, 38, 38, 0.4);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-3px) scale(1.02);
+            box-shadow: 0 8px 25px rgba(220, 38, 38, 0.5);
+        }
+
+        .btn-secondary {
+            background-color: var(--card-bg);
+            color: var(--text-color);
+            border: 2px solid var(--border-color);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .btn-secondary:hover {
+            background-color: var(--hover-color);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #dc2626, #b91c1c);
+            color: white;
+            box-shadow: 0 4px 15px rgba(220, 38, 38, 0.4);
+        }
+
+        .btn-danger:hover {
+            transform: translateY(-3px) scale(1.02);
+            box-shadow: 0 8px 25px rgba(220, 38, 38, 0.5);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        .btn-sm {
+            padding: 8px 16px;
+            font-size: 0.9rem;
+            min-width: auto;
+            border-radius: 8px;
+        }
+
+        .actions-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-top: 24px;
+        }
+
+        .action-card {
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            transition: var(--transition);
+        }
+
+        .action-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .action-icon {
+            font-size: 2rem;
+            margin-bottom: 12px;
+            display: block;
+        }
+
+        .events-list {
+            max-height: 500px;
+            overflow-y: auto;
+            margin-top: 20px;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            background-color: rgba(255, 255, 255, 0.05);
+        }
+
+        .event-item {
+            padding: 16px 20px;
+            margin-bottom: 8px;
+            background-color: rgba(255, 255, 255, 0.03);
+            border-radius: 10px;
+            border-left: 4px solid var(--accent-color);
+            transition: var(--transition);
+            position: relative;
+        }
+
+        .event-item:hover {
+            background-color: rgba(255, 255, 255, 0.08);
+            transform: translateX(4px);
+        }
+
+        .event-item::before {
+            content: '';
+            position: absolute;
+            left: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 6px;
+            height: 6px;
+            background: var(--accent-color);
+            border-radius: 50%;
+        }
+
+        .event-time {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+            font-weight: 500;
+        }
+
+        .event-content {
+            font-size: 0.95rem;
+            line-height: 1.5;
+        }
+
+        .event-success {
+            border-left-color: var(--success-color);
+        }
+
+        .event-warning {
+            border-left-color: var(--warning-color);
+        }
+
+        .event-danger {
+            border-left-color: var(--danger-color);
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-muted);
+        }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-top: 3px solid var(--accent-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        .error {
+            background: linear-gradient(135deg, rgba(220, 38, 38, 0.2), rgba(220, 38, 38, 0.1));
+            color: var(--danger-color);
+            padding: 20px;
+            border-radius: 12px;
+            margin: 16px 0;
+            border: 1px solid rgba(220, 38, 38, 0.3);
+            border-left: 6px solid var(--danger-color);
+            box-shadow: 0 4px 15px rgba(220, 38, 38, 0.2);
+        }
+
+        .success {
+            background: linear-gradient(135deg, rgba(22, 163, 74, 0.2), rgba(22, 163, 74, 0.1));
+            color: var(--success-color);
+            padding: 20px;
+            border-radius: 12px;
+            margin: 16px 0;
+            border: 1px solid rgba(22, 163, 74, 0.3);
+            border-left: 6px solid var(--success-color);
+            box-shadow: 0 4px 15px rgba(22, 163, 74, 0.2);
+        }
+
+        .warning {
+            background: linear-gradient(135deg, rgba(234, 179, 8, 0.2), rgba(234, 179, 8, 0.1));
+            color: var(--warning-color);
+            padding: 20px;
+            border-radius: 12px;
+            margin: 16px 0;
+            border: 1px solid rgba(234, 179, 8, 0.3);
+            border-left: 6px solid var(--warning-color);
+            box-shadow: 0 4px 15px rgba(234, 179, 8, 0.2);
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--text-muted);
+            font-weight: 500;
+            font-size: 0.95rem;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 14px 16px;
+            border: 2px solid var(--border-color);
+            border-radius: 10px;
+            background-color: var(--card-bg);
+            color: var(--text-color);
+            font-size: 1rem;
+            transition: var(--transition);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.2);
+            transform: translateY(-2px);
+        }
+
+        .form-group input::placeholder {
+            color: var(--text-muted);
+            opacity: 0.7;
+        }
+
+        @media (max-width: 768px) {
+            .app-container {
+                padding: 10px;
+            }
+            
+            .container {
+                padding: 10px;
+            }
+            
+            .grid {
+                grid-template-columns: 1fr;
+                gap: 16px;
+            }
+            
+            .actions-grid {
+                grid-template-columns: 1fr;
+                gap: 12px;
+            }
+            
+            .header h1 {
+                font-size: 2.2rem;
+            }
+            
+            .header p {
+                font-size: 1.1rem;
+            }
+            
+            .btn {
+                min-width: 120px;
+                padding: 12px 20px;
+            }
+            
+            .card {
+                padding: 20px;
+                border-radius: 12px;
+            }
+            
+            .status-item {
+                padding: 10px 12px;
+                margin-bottom: 8px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .header h1 {
+                font-size: 1.8rem;
+            }
+            
+            .header p {
+                font-size: 1rem;
+            }
+            
+            .btn {
+                width: 100%;
+                min-width: auto;
+            }
+            
+            .header-actions {
+                flex-direction: column;
+                width: 100%;
+            }
+        }
+
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+
+        .slide-up {
+            animation: slideUp 0.4s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes slideUp {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .theme-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            background: var(--card-bg);
+            border: 2px solid var(--border-color);
+            border-radius: 50%;
+            width: 48px;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: var(--transition);
+            box-shadow: var(--shadow);
+        }
+
+        .theme-toggle:hover {
+            transform: rotate(180deg) scale(1.1);
+            background: var(--hover-color);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin: 20px 0;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            transition: var(--transition);
+        }
+
+        .stat-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .stat-number {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--accent-color);
+            margin-bottom: 8px;
+        }
+
+        .stat-label {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .health-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+            animation: pulse 2s infinite;
+        }
+
+        .health-good {
+            background-color: var(--success-color);
+        }
+
+        .health-warning {
+            background-color: var(--warning-color);
+        }
+
+        .health-critical {
+            background-color: rgba(220, 38, 38, 0.3);
+            color: var(--danger-color);
+            border: 1px solid rgba(220, 38, 38, 0.5);
+            animation: pulse 2s infinite;
+        }
+
+        .status-warning {
+            background-color: rgba(234, 179, 8, 0.2);
+            color: var(--warning-color);
+            border: 1px solid rgba(234, 179, 8, 0.3);
+        }
+
+        /* Modal styles */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(5px);
+        }
+
+        .modal-content {
+            background-color: var(--card-bg);
+            padding: 30px;
+            border-radius: 16px;
+            min-width: 400px;
+            max-width: 90%;
+            max-height: 80%;
+            overflow-y: auto;
+            border: 2px solid var(--border-color);
+            box-shadow: var(--shadow);
+            animation: slideUp 0.3s ease-out;
+        }
+
+        .modal-content h3 {
+            color: var(--accent-color);
+            margin-bottom: 15px;
+            font-size: 1.4rem;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 20px;
+            justify-content: flex-end;
+        }
+
+        /* API Docs styles */
+        .api-docs {
+            margin: 20px 0;
+        }
+
+        .endpoint {
+            margin-bottom: 15px;
+            padding: 15px;
+            background-color: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            border-left: 4px solid var(--accent-color);
+        }
+
+        .endpoint code {
+            background-color: var(--secondary-color);
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            color: var(--accent-color);
+            font-weight: bold;
+        }
+
+        .endpoint p {
+            margin: 8px 0 0 0;
+            color: var(--text-muted);
+            font-size: 0.95rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="theme-toggle" onclick="toggleTheme()" title="Toggle theme">
+        🌓
+    </div>
+
+    <div class="app-container">
+        <div class="header">
+            <h1>⚰️ Lazarus Protocol Dashboard</h1>
+            <p>Monitor and manage your digital legacy protocol</p>
+            <div class="header-actions">
+                <button class="btn btn-sm btn-secondary" onclick="loadStatus()" title="Refresh status">
+                    🔄 Refresh
+                </button>
+                <button class="btn btn-sm btn-secondary" onclick="showApiDocsModal()" title="View API documentation">
+                    📚 API Docs
+                </button>
+                <button class="btn btn-sm btn-secondary" onclick="window.location.href='/pricing'" title="View pricing plans">
+                    💰 Pricing
+                </button>
+            </div>
+        </div>
+
+        <div id="loading" class="loading">
+            <div class="loading-spinner"></div>
+            <p>Loading Lazarus Protocol status...</p>
+        </div>
+
+        <div id="error" class="error" style="display: none;">
+            <h3>🚨 Connection Error</h3>
+            <p>Failed to connect to Lazarus server. Please ensure:</p>
+            <ul>
+                <li>The Lazarus server is running on port 6666</li>
+                <li>You have proper network access</li>
+                <li>The server URL is correct: <code>http://localhost:6666</code></li>
+            </ul>
+            <button class="btn btn-sm btn-secondary" onclick="loadStatus()">🔄 Retry Connection</button>
+        </div>
+
+        <div id="dashboard" style="display: none;">
+            <!-- Health Status Bar -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-number" id="health-indicator">
+                        <span class="health-indicator health-good"></span>
+                        <span id="health-status">Healthy</span>
+                    </div>
+                    <div class="stat-label">System Health</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="uptime-stat">0d 0h</div>
+                    <div class="stat-label">Uptime</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="events-count">0</div>
+                    <div class="stat-label">Total Events</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="deliveries-count">0</div>
+                    <div class="stat-label">Deliveries</div>
+                </div>
+            </div>
+
+            <div class="grid">
+                <!-- Status Panel -->
+                <div class="card">
+                    <h2>📊 Status Overview</h2>
+                    <div id="status-items">
+                        <div class="status-item">
+                            <span class="status-label">Protocol State:</span>
+                            <span id="armed-state" class="status-value status-badge">Loading...</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">Days Remaining:</span>
+                            <span id="days-remaining" class="status-value">Loading...</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">Last Check-in:</span>
+                            <span id="last-ping" class="status-value">Loading...</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">Agent Status:</span>
+                            <span id="agent-status" class="status-value status-badge">Loading...</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">Owner:</span>
+                            <span id="owner-name" class="status-value">Loading...</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">Beneficiaries:</span>
+                            <span id="beneficiary-count" class="status-value">Loading...</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">Check-in Interval:</span>
+                            <span id="checkin-interval" class="status-value">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="card">
+                    <h2>⚡ Quick Actions</h2>
+                    <div class="actions-grid">
+                        <div class="action-card">
+                            <span class="action-icon">📍</span>
+                            <button id="ping-btn" class="btn btn-primary" onclick="handlePing()">
+                                Ping Check-in
+                            </button>
+                            <p class="status-label">Record your presence</p>
+                        </div>
+                        <div class="action-card">
+                            <span class="action-icon">❄️</span>
+                            <button id="freeze-btn" class="btn btn-secondary" onclick="showFreezeModal()">
+                                Extend Deadline
+                            </button>
+                            <p class="status-label">Add more time</p>
+                        </div>
+                        <div class="action-card">
+                            <span class="action-icon">🔄</span>
+                            <button id="refresh-btn" class="btn btn-secondary" onclick="loadStatus()">
+                                Refresh Status
+                            </button>
+                            <p class="status-label">Update information</p>
+                        </div>
+                    </div>
+                    
+                    <div id="action-feedback" style="margin-top: 20px;"></div>
+                </div>
+
+                <!-- Bundle Management -->
+                <div class="card">
+                    <h2>📦 Document Bundle</h2>
+                    <div id="bundle-info">
+                        <div class="loading">Loading bundle information...</div>
+                    </div>
+                    <div class="actions-grid" style="margin-top: 20px;">
+                        <button class="btn btn-secondary btn-sm" onclick="showAddDocumentModal()">
+                            ➕ Add Document
+                        </button>
+                        <button class="btn btn-secondary btn-sm" onclick="refreshBundle()">
+                            🔄 Refresh Bundle
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Events -->
+            <div class="card">
+                <h2>📋 Recent Activity</h2>
+                <div class="actions-grid" style="margin-bottom: 20px;">
+                    <button class="btn btn-secondary btn-sm" onclick="loadEvents(20)">
+                        Last 20 Events
+                    </button>
+                    <button class="btn btn-secondary btn-sm" onclick="loadEvents(50)">
+                        Last 50 Events
+                    </button>
+                    <button class="btn btn-secondary btn-sm" onclick="clearEventsCache()">
+                        🗑️ Clear Cache
+                    </button>
+                </div>
+                <div id="events-list" class="events-list">
+                    <div class="loading">Loading events...</div>
+                </div>
+            </div>
+
+            <!-- System Information -->
+            <div class="card">
+                <h2>🖥️ System Info</h2>
+                <div class="status-item">
+                    <span class="status-label">Server Version:</span>
+                    <span id="server-version" class="status-value">v1.0.0</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">API Status:</span>
+                    <span id="api-status" class="status-value status-badge status-running">Online</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">Last Updated:</span>
+                    <span id="last-updated" class="status-value">Just now</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Freeze Modal -->
+    <div id="freeze-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <h3>❄️ Extend Deadline</h3>
+            <p class="status-label">Add more days before the protocol triggers</p>
+            <div class="form-group">
+                <label for="freeze-days">Number of days to extend:</label>
+                <input type="number" id="freeze-days" value="30" min="1" max="365" placeholder="Enter days (1-365)">
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-primary" onclick="handleFreeze()">✅ Confirm</button>
+                <button class="btn btn-secondary" onclick="hideFreezeModal()">❌ Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Document Modal -->
+    <div id="add-document-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <h3>📄 Add Document to Bundle</h3>
+            <p class="status-label">Add files to be delivered to your beneficiaries</p>
+            <div class="form-group">
+                <label for="document-path">File Path:</label>
+                <input type="text" id="document-path" placeholder="/path/to/your/document.txt">
+            </div>
+            <div class="form-group">
+                <label for="document-type">Document Type:</label>
+                <select id="document-type">
+                    <option value="WALLET">Wallet Information</option>
+                    <option value="PASSWORD">Password File</option>
+                    <option value="INSTRUCTION">Instructions</option>
+                    <option value="LEGAL">Legal Document</option>
+                    <option value="OTHER">Other</option>
+                </select>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-primary" onclick="handleAddDocument()">✅ Add Document</button>
+                <button class="btn btn-secondary" onclick="hideAddDocumentModal()">❌ Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- API Docs Modal -->
+    <div id="api-docs-modal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 800px;">
+            <h3>📚 API Documentation</h3>
+            <div class="api-docs">
+                <h4>Available Endpoints:</h4>
+                <div class="endpoint">
+                    <code>GET /status</code>
+                    <p>Get current Lazarus protocol status</p>
+                </div>
+                <div class="endpoint">
+                    <code>POST /ping</code>
+                    <p>Record a check-in (optional PIN for duress mode)</p>
+                </div>
+                <div class="endpoint">
+                    <code>POST /freeze</code>
+                    <p>Extend deadline by specified days</p>
+                </div>
+                <div class="endpoint">
+                    <code>GET /events?limit=50</code>
+                    <p>Get recent events log</p>
+                </div>
+                <div class="endpoint">
+                    <code>GET /bundle</code>
+                    <p>Get bundle manifest information</p>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="hideApiDocsModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+        let currentStatus = null;
+        let eventsCache = [];
+        let bundleCache = [];
+
+        // DOM Elements
+        const loadingEl = document.getElementById('loading');
+        const errorEl = document.getElementById('error');
+        const dashboardEl = document.getElementById('dashboard');
+        const statusItemsEl = document.getElementById('status-items');
+        const eventsListEl = document.getElementById('events-list');
+        const actionFeedbackEl = document.getElementById('action-feedback');
+        const freezeModalEl = document.getElementById('freeze-modal');
+        const addDocumentModalEl = document.getElementById('add-document-modal');
+        const apiDocsModalEl = document.getElementById('api-docs-modal');
+        const bundleInfoEl = document.getElementById('bundle-info');
+
+        // Theme management
+        function toggleTheme() {
+            const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', newTheme);
+            localStorage.setItem('lazarus-theme', newTheme);
+            
+            // Update theme toggle button
+            const themeToggle = document.querySelector('.theme-toggle');
+            themeToggle.textContent = newTheme === 'dark' ? '🌓' : '🌙';
+            
+            showFeedback(`Switched to ${newTheme} theme`, 'success');
+        }
+
+        // Load saved theme
+        function loadSavedTheme() {
+            const savedTheme = localStorage.getItem('lazarus-theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+            const themeToggle = document.querySelector('.theme-toggle');
+            themeToggle.textContent = savedTheme === 'dark' ? '🌓' : '🌙';
+        }
+
+        // Format date for display
+        function formatDate(dateString) {
+            if (!dateString) return 'Never';
+            const date = new Date(dateString);
+            return date.toLocaleString();
+        }
+
+        // Format time difference
+        function formatTimeDifference(timestamp) {
+            if (!timestamp) return 'Never';
+            const now = new Date();
+            const then = new Date(timestamp);
+            const diffMs = now - then;
+            const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+            const diffHours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const diffMins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+            
+            if (diffDays > 0) {
+                return `${diffDays}d ${diffHours}h ago`;
+            } else if (diffHours > 0) {
+                return `${diffHours}h ${diffMins}m ago`;
+            }
+            return `${diffMins}m ago`;
+        }
+
+        // Format duration
+        function formatDuration(seconds) {
+            const days = Math.floor(seconds / 86400);
+            const hours = Math.floor((seconds % 86400) / 3600);
+            return `${days}d ${hours}h`;
+        }
+
+        // Determine health status
+        function getHealthStatus(data) {
+            if (!data.initialized) return 'critical';
+            if (data.days_remaining !== null && data.days_remaining < 3) return 'critical';
+            if (data.days_remaining !== null && data.days_remaining < 7) return 'warning';
+            if (!data.agent?.running) return 'warning';
+            return 'good';
+        }
+
+        // Modal management
+        function showModal(modalEl) {
+            modalEl.style.display = 'block';
+            document.body.style.overflow = 'hidden';
+        }
+
+        function hideModal(modalEl) {
+            modalEl.style.display = 'none';
+            document.body.style.overflow = 'auto';
+        }
+
+        function showFreezeModal() {
+            showModal(freezeModalEl);
+        }
+
+        function hideFreezeModal() {
+            hideModal(freezeModalEl);
+        }
+
+        function showAddDocumentModal() {
+            showModal(addDocumentModalEl);
+        }
+
+        function hideAddDocumentModal() {
+            hideModal(addDocumentModalEl);
+        }
+
+        function showApiDocsModal() {
+            showModal(apiDocsModalEl);
+        }
+
+        function hideApiDocsModal() {
+            hideModal(apiDocsModalEl);
+        }
+
+        // Show loading state
+        function showLoading() {
+            loadingEl.style.display = 'block';
+            errorEl.style.display = 'none';
+            dashboardEl.style.display = 'none';
+        }
+
+        // Show error state
+        function showError(message) {
+            loadingEl.style.display = 'none';
+            errorEl.style.display = 'block';
+            errorEl.innerHTML = `
+                <h3>🚨 Connection Error</h3>
+                <p>${message}</p>
+                <button class="btn btn-sm btn-secondary" onclick="loadStatus()">🔄 Retry Connection</button>
+            `;
+            dashboardEl.style.display = 'none';
+        }
+
+        // Show dashboard
+        function showDashboard() {
+            loadingEl.style.display = 'none';
+            errorEl.style.display = 'none';
+            dashboardEl.style.display = 'block';
+            dashboardEl.classList.add('fade-in');
+        }
+
+        // Show action feedback
+        function showFeedback(message, type = 'success') {
+            const feedbackClass = type === 'error' ? 'error' : type === 'warning' ? 'warning' : 'success';
+            actionFeedbackEl.innerHTML = `<div class="${feedbackClass} slide-up">${message}</div>`;
+            setTimeout(() => {
+                actionFeedbackEl.innerHTML = '';
+            }, 5000);
+        }
+
+        // Clear events cache
+        function clearEventsCache() {
+            eventsCache = [];
+            localStorage.removeItem('lazarus-events-cache');
+            showFeedback('Events cache cleared', 'success');
+            loadEvents(20);
+        }
+
+        // Load status from API
+        async function loadStatus() {
+            showLoading();
+            
+            try {
+                const response = await fetch(`${API_BASE}/status`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                currentStatus = data;
+                
+                if (!data.initialized) {
+                    showError('Lazarus Protocol not initialized. Please run the CLI setup first.');
+                    return;
+                }
+                
+                updateStatusDisplay(data);
+                await loadEvents(20);
+                await loadBundleInfo();
+                updateHealthStatus(data);
+                showDashboard();
+                
+                // Update last updated timestamp
+                document.getElementById('last-updated').textContent = new Date().toLocaleTimeString();
+                
+            } catch (error) {
+                console.error('Failed to load status:', error);
+                showError('Failed to connect to Lazarus server. Make sure the server is running on port 6666.');
+            }
+        }
+
+        // Load events with caching
+        async function loadEvents(limit = 20) {
+            try {
+                const response = await fetch(`${API_BASE}/events?limit=${limit}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                eventsCache = data.events || [];
+                localStorage.setItem('lazarus-events-cache', JSON.stringify(eventsCache));
+                updateEventsDisplay(eventsCache);
+                
+            } catch (error) {
+                console.error('Failed to load events:', error);
+                // Try to use cached events
+                const cachedEvents = localStorage.getItem('lazarus-events-cache');
+                if (cachedEvents) {
+                    eventsCache = JSON.parse(cachedEvents);
+                    updateEventsDisplay(eventsCache);
+                    showFeedback('Using cached events - server may be offline', 'warning');
+                }
+            }
+        }
+
+        // Load bundle information
+        async function loadBundleInfo() {
+            try {
+                const response = await fetch(`${API_BASE}/bundle`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                bundleCache = data.manifest || [];
+                updateBundleDisplay(data);
+                
+            } catch (error) {
+                console.error('Failed to load bundle:', error);
+                bundleInfoEl.innerHTML = `
+                    <div class="error">
+                        Failed to load bundle information: ${error.message}
+                    </div>
+                `;
+            }
+        }
+
+        // Refresh bundle
+        async function refreshBundle() {
+            await loadBundleInfo();
+            showFeedback('Bundle information refreshed', 'success');
+        }
+
+        // Update health status
+        function updateHealthStatus(data) {
+            const healthStatus = getHealthStatus(data);
+            const healthIndicator = document.querySelector('.health-indicator');
+            const healthText = document.getElementById('health-status');
+            
+            healthIndicator.className = `health-indicator health-${healthStatus}`;
+            healthText.textContent = healthStatus.charAt(0).toUpperCase() + healthStatus.slice(1);
+            
+            // Update stats
+            document.getElementById('events-count').textContent = eventsCache.length;
+            document.getElementById('deliveries-count').textContent = (data.deliveries || []).length;
+            
+            // Simple uptime calculation (would need server-side support for real uptime)
+            const startTime = localStorage.getItem('lazarus-start-time') || Date.now();
+            localStorage.setItem('lazarus-start-time', startTime);
+            const uptimeSeconds = Math.floor((Date.now() - parseInt(startTime)) / 1000);
+            document.getElementById('uptime-stat').textContent = formatDuration(uptimeSeconds);
+        }
+
+        // Update status display
+        function updateStatusDisplay(data) {
+            const armedState = document.getElementById('armed-state');
+            armedState.textContent = data.armed ? 'ARMED' : 'DISARMED';
+            armedState.className = `status-value status-badge ${data.armed ? 'status-armed' : 'status-disarmed'}`;
+            
+            const daysRemaining = document.getElementById('days-remaining');
+            daysRemaining.textContent = data.days_remaining !== null ? `${data.days_remaining.toFixed(1)} days` : 'N/A';
+            
+            // Add warning class if days are low
+            if (data.days_remaining !== null && data.days_remaining < 7) {
+                daysRemaining.classList.add('status-warning');
+            } else {
+                daysRemaining.classList.remove('status-warning');
+            }
+            
+            document.getElementById('last-ping').textContent = 
+                data.last_ping ? formatTimeDifference(data.last_ping) : 'Never';
+            
+            const agentStatus = document.getElementById('agent-status');
+            agentStatus.textContent = data.agent?.running ? 'RUNNING' : 'STOPPED';
+            agentStatus.className = `status-value status-badge ${data.agent?.running ? 'status-running' : 'status-stopped'}`;
+            
+            document.getElementById('owner-name').textContent = data.owner_name || 'Unknown';
+            document.getElementById('beneficiary-count').textContent = data.beneficiary_count || 0;
+            document.getElementById('checkin-interval').textContent = 
+                `${data.checkin_interval_days} days`;
+        }
+
+        // Update bundle display
+        function updateBundleDisplay(data) {
+            if (!data.success || !data.manifest || data.manifest.length === 0) {
+                bundleInfoEl.innerHTML = `
+                    <div class="status-item">
+                        <span class="status-label">Bundle Status:</span>
+                        <span class="status-value status-warning">Empty</span>
+                    </div>
+                    <p class="status-label">No documents in the delivery bundle</p>
+                `;
+                return;
+            }
+            
+            const bundleHtml = `
+                <div class="status-item">
+                    <span class="status-label">Documents:</span>
+                    <span class="status-value">${data.manifest.length}</span>
+                </div>
+                <div style="max-height: 200px; overflow-y: auto; margin-top: 15px;">
+                    ${data.manifest.map(doc => `
+                        <div class="status-item" style="margin-bottom: 8px;">
+                            <span class="status-label">${doc.filename}</span>
+                            <span class="status-value" style="font-size: 0.9rem;">${doc.type || 'OTHER'}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+            bundleInfoEl.innerHTML = bundleHtml;
+        }
+
+        // Update events display
+        function updateEventsDisplay(events) {
+            if (events.length === 0) {
+                eventsListEl.innerHTML = `
+                    <div class="event-item event-warning">
+                        <div class="event-time">${new Date().toISOString()}</div>
+                        <div class="event-content">No events recorded yet</div>
+                    </div>
+                `;
+                return;
+            }
+            
+            const eventsHtml = events.map(event => {
+                let eventClass = 'event-item';
+                if (event.content.includes('SUCCESS') || event.content.includes('CHECKIN')) {
+                    eventClass += ' event-success';
+                } else if (event.content.includes('WARNING') || event.content.includes('FAILED')) {
+                    eventClass += ' event-warning';
+                } else if (event.content.includes('ERROR') || event.content.includes('CRITICAL')) {
+                    eventClass += ' event-danger';
+                }
+                
+                return `
+                    <div class="${eventClass}">
+                        <div class="event-time">${event.timestamp}</div>
+                        <div class="event-content">${event.content}</div>
+                    </div>
+                `;
+            }).join('');
+            
+            eventsListEl.innerHTML = eventsHtml;
+        }
+
+        // Handle ping action
+        async function handlePing() {
+            const pingBtn = document.getElementById('ping-btn');
+            pingBtn.disabled = true;
+            pingBtn.innerHTML = '<span class="pulse">⏳</span> Checking in...';
+            
+            try {
+                const response = await fetch(`${API_BASE}/ping`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({})
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                showFeedback(result.message, 'success');
+                
+                // Refresh status after successful ping
+                setTimeout(loadStatus, 1000);
+                
+            } catch (error) {
+                console.error('Ping failed:', error);
+                showFeedback('Failed to record check-in: ' + error.message, 'error');
+            } finally {
+                pingBtn.disabled = false;
+                pingBtn.innerHTML = '📍 Ping Check-in';
+            }
+        }
+
+        // Handle freeze action
+        async function handleFreeze() {
+            const daysInput = document.getElementById('freeze-days');
+            const days = parseInt(daysInput.value);
+            
+            if (isNaN(days) || days < 1 || days > 365) {
+                showFeedback('Please enter a valid number of days (1-365)', 'error');
+                return;
+            }
+            
+            const freezeBtn = document.querySelector('#freeze-modal .btn-primary');
+            freezeBtn.disabled = true;
+            freezeBtn.innerHTML = '<span class="pulse">⏳</span> Extending...';
+            
+            try {
+                const response = await fetch(`${API_BASE}/freeze`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ days })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                showFeedback(result.message, 'success');
+                hideFreezeModal();
+                
+                // Refresh status after successful freeze
+                setTimeout(loadStatus, 1000);
+                
+            } catch (error) {
+                console.error('Freeze failed:', error);
+                showFeedback('Failed to extend deadline: ' + error.message, 'error');
+            } finally {
+                freezeBtn.disabled = false;
+                freezeBtn.textContent = 'Confirm';
+            }
+        }
+
+        // Handle add document action
+        async function handleAddDocument() {
+            const filePath = document.getElementById('document-path').value;
+            const docType = document.getElementById('document-type').value;
+            
+            if (!filePath) {
+                showFeedback('Please enter a file path', 'error');
+                return;
+            }
+            
+            const addBtn = document.querySelector('#add-document-modal .btn-primary');
+            addBtn.disabled = true;
+            addBtn.innerHTML = '<span class="pulse">⏳</span> Adding...';
+            
+            try {
+                const response = await fetch(`${API_BASE}/bundle/add`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ 
+                        file_path: filePath,
+                        document_type: docType 
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                showFeedback(`Document added: ${result.document.filename}`, 'success');
+                hideAddDocumentModal();
+                
+                // Refresh bundle information
+                setTimeout(loadBundleInfo, 500);
+                
+            } catch (error) {
+                console.error('Add document failed:', error);
+                showFeedback('Failed to add document: ' + error.message, 'error');
+            } finally {
+                addBtn.disabled = false;
+                addBtn.textContent = 'Add Document';
+            }
+        }
+
+        // Auto-refresh every 30 seconds
+        setInterval(loadStatus, 30000);
+
+        // Initial load with saved theme
+        document.addEventListener('DOMContentLoaded', () => {
+            loadSavedTheme();
+            loadStatus();
+        });
+
+        // Close modals on outside click
+        [freezeModalEl, addDocumentModalEl, apiDocsModalEl].forEach(modal => {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    hideModal(modal);
+                }
+            });
+        });
+
+        // Add keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                hideFreezeModal();
+                hideAddDocumentModal();
+                hideApiDocsModal();
+            }
+            if (e.key === 'r' && (e.ctrlKey || e.metaKey)) {
+                e.preventDefault();
+                loadStatus();
+            }
+        });
+    </script>
+</body>
+</html>

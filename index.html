@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth bg-black">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Lazarus Protocol - Self-hosted dead man's switch for crypto holders. Protect your digital legacy with military-grade encryption.">
+    <title>LAZARUS PROTOCOL | Preserved Legacy</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;800&family=Inter:wght@300;400;500&family=JetBrains+Mono:wght@100..800&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        cinematic: ['Cinzel', 'serif'],
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        blood: '#8b0000',
+                        abyss: '#030303',
+                        smoke: '#1a1a1a',
+                        silver: '#c0c0c0',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #000;
+            color: #d1d5db;
+            overflow-x: hidden;
+        }
+
+        /* Ambient Cinematic Lighting */
+        .ambient-light {
+            position: fixed;
+            top: -20vh;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100vw;
+            height: 60vh;
+            background: radial-gradient(ellipse at center, rgba(139,0,0,0.15) 0%, rgba(0,0,0,0) 70%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* Film Grain Overlay */
+        .film-grain {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.04'/%3E%3C/svg%3E");
+            pointer-events: none;
+            z-index: 50;
+        }
+
+        /* Vignette */
+        .vignette {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            box-shadow: 0 0 200px rgba(0,0,0,0.9) inset;
+            pointer-events: none;
+            z-index: 40;
+        }
+
+        /* Smoked Glass Elements */
+        .smoked-glass {
+            background: linear-gradient(145deg, rgba(26,26,26,0.6) 0%, rgba(10,10,10,0.8) 100%);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.03);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
+            transition: all 0.4s ease;
+        }
+
+        .smoked-glass:hover {
+            border-color: rgba(139, 0, 0, 0.4);
+            transform: translateY(-4px);
+        }
+
+        .cinematic-text {
+            background: linear-gradient(to bottom, #ffffff 0%, #8b0000 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .fade-in-up {
+            animation: fadeInUp 1.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            opacity: 0;
+            transform: translateY(30px);
+        }
+
+        .delay-1 { animation-delay: 0.3s; }
+        .delay-2 { animation-delay: 0.6s; }
+        .delay-3 { animation-delay: 0.9s; }
+
+        @keyframes fadeInUp {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Elegant Button */
+        .btn-cinematic {
+            position: relative;
+            overflow: hidden;
+            border: 1px solid rgba(139, 0, 0, 0.5);
+            background: rgba(0, 0, 0, 0.5);
+            transition: all 0.5s ease;
+        }
+        
+        .btn-cinematic::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(139, 0, 0, 0.2), transparent);
+            transition: all 0.5s ease;
+        }
+        
+        .btn-cinematic:hover {
+            border-color: #8b0000;
+            box-shadow: 0 0 20px rgba(139, 0, 0, 0.3);
+        }
+        
+        .btn-cinematic:hover::before {
+            left: 100%;
+        }
+
+        .pricing-highlight {
+            border-color: #8b0000;
+            background: linear-gradient(145deg, rgba(139, 0, 0, 0.1) 0%, rgba(10,10,10,0.8) 100%);
+            box-shadow: 0 0 40px rgba(139, 0, 0, 0.15);
+        }
+    </style>
+</head>
+<body class="relative min-h-screen flex flex-col font-sans selection:bg-blood selection:text-white">
+
+    <div class="ambient-light"></div>
+    <div class="film-grain"></div>
+    <div class="vignette"></div>
+
+    <nav class="fixed w-full top-0 z-50 transition-all duration-500 border-b border-white/5 bg-black/50 backdrop-blur-md">
+        <div class="max-w-7xl mx-auto px-8 py-6 flex justify-between items-center">
+            <div class="flex items-center gap-3 fade-in-up">
+                <span class="font-cinematic text-2xl font-semibold tracking-[0.2em] text-white">LAZARUS</span>
+            </div>
+            <div class="hidden md:flex gap-8 text-xs tracking-[0.15em] uppercase font-light text-silver fade-in-up delay-1">
+                <a href="#prologue" class="hover:text-white transition-colors duration-300">Prologue</a>
+                <a href="#threats" class="hover:text-white transition-colors duration-300">Threat Matrix</a>
+                <a href="#security" class="hover:text-white transition-colors duration-300">Security</a>
+                <a href="#pricing" class="hover:text-white transition-colors duration-300">Pricing</a>
+                <a href="#testimonials" class="hover:text-white transition-colors duration-300">Testimonials</a>
+            </div>
+            <div class="fade-in-up delay-2">
+                <a href="https://github.com/ravikumarve/lazarus" class="text-xs tracking-[0.2em] uppercase font-cinematic text-white border-b border-blood pb-1 hover:text-blood transition-colors">
+                    View Source
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="relative z-10 flex flex-col items-center justify-center min-h-screen px-6 pt-20 text-center">
+        <div class="fade-in-up delay-1 mb-6">
+            <span class="inline-block px-4 py-1 text-[10px] tracking-[0.3em] uppercase border border-white/10 text-white/50 backdrop-blur-sm">
+                Self-Hosted Failsafe Protocol
+            </span>
+        </div>
+        
+        <h1 class="font-cinematic text-5xl md:text-7xl lg:text-8xl font-bold tracking-[0.1em] mb-8 leading-tight fade-in-up delay-2">
+            YOUR DIGITAL LEGACY,<br />
+            <span class="cinematic-text">PRESERVED.</span>
+        </h1>
+        
+        <p class="font-sans font-light text-lg md:text-xl max-w-2xl mx-auto text-silver leading-relaxed fade-in-up delay-3">
+            For crypto holders who need a failsafe. Protect your digital assets with military-grade encryption and zero-knowledge architecture. No middlemen. No trust required.
+        </p>
+
+        <div class="mt-16 flex gap-6 fade-in-up delay-3">
+            <a href="#execution" class="btn-cinematic px-10 py-4 font-cinematic text-sm tracking-[0.2em] text-white uppercase inline-block cursor-pointer">
+                Start Free
+            </a>
+            <a href="#pricing" class="px-10 py-4 font-cinematic text-sm tracking-[0.2em] text-silver uppercase border border-white/10 hover:border-white/40 transition-colors cursor-pointer">
+                View Plans
+            </a>
+        </div>
+    </main>
+
+    <section id="prologue" class="relative z-10 py-32 px-6 bg-abyss border-y border-white/5">
+        <div class="max-w-4xl mx-auto text-center">
+            <h2 class="font-cinematic text-3xl md:text-5xl text-white mb-10 tracking-[0.1em]">The Inevitable</h2>
+            <div class="w-px h-24 bg-gradient-to-b from-blood to-transparent mx-auto mb-10"></div>
+            <p class="text-xl md:text-2xl font-light leading-relaxed text-silver italic">
+                "When you're gone, your digital assets shouldn't be lost forever. Lazarus Protocol ensures your private keys, wallet phrases, and access credentials survive you."
+            </p>
+        </div>
+    </section>
+
+    <section id="threats" class="relative z-10 py-32 px-6">
+        <div class="max-w-7xl mx-auto">
+            <div class="flex flex-col md:flex-row justify-between items-end mb-20 gap-6 border-b border-white/10 pb-6">
+                <div>
+                    <h2 class="font-cinematic text-4xl text-white tracking-[0.1em]">Enterprise-Grade Features</h2>
+                </div>
+                <div class="text-xs font-mono text-blood tracking-[0.2em] uppercase">
+                    Status: Active Defense
+                </div>
+            </div>
+
+            <div class="grid lg:grid-cols-3 gap-8">
+                <div class="smoked-glass p-10">
+                    <div class="text-blood mb-8 text-3xl font-light">🔐</div>
+                    <h3 class="font-cinematic text-xl text-white tracking-[0.1em] mb-4">Military-Grade Encryption</h3>
+                    <p class="text-sm font-light text-silver leading-relaxed mb-6">
+                        AES-256-GCM + RSA-4096 hybrid encryption ensures your secrets remain completely protected until final delivery.
+                    </p>
+                </div>
+
+                <div class="smoked-glass p-10">
+                    <div class="text-blood mb-8 text-3xl font-light">🏠</div>
+                    <h3 class="font-cinematic text-xl text-white tracking-[0.1em] mb-4">Self-Hosted</h3>
+                    <p class="text-sm font-light text-silver leading-relaxed mb-6">
+                        No cloud dependencies. Your data never leaves your control. Run entirely on your own hardware.
+                    </p>
+                </div>
+
+                <div class="smoked-glass p-10">
+                    <div class="text-blood mb-8 text-3xl font-light">⚡</div>
+                    <h3 class="font-cinematic text-xl text-white tracking-[0.1em] mb-4">Automated Monitoring</h3>
+                    <p class="text-sm font-light text-silver leading-relaxed mb-6">
+                        Background agent with configurable check-in intervals and intelligent escalation protocols to prevent accidental triggers.
+                    </p>
+                </div>
+
+                <div class="smoked-glass p-10">
+                    <div class="text-blood mb-8 text-3xl font-light">🌐</div>
+                    <h3 class="font-cinematic text-xl text-white tracking-[0.1em] mb-4">Web Dashboard</h3>
+                    <p class="text-sm font-light text-silver leading-relaxed mb-6">
+                        Professional React-inspired interface with dark/light themes and full mobile responsive design architecture.
+                    </p>
+                </div>
+
+                <div class="smoked-glass p-10">
+                    <div class="text-blood mb-8 text-3xl font-light">📱</div>
+                    <h3 class="font-cinematic text-xl text-white tracking-[0.1em] mb-4">Multi-Channel Alerts</h3>
+                    <p class="text-sm font-light text-silver leading-relaxed mb-6">
+                        Receive critical notifications via Email (SendGrid) and Telegram, ensuring you never miss a required check-in.
+                    </p>
+                </div>
+
+                <div class="smoked-glass p-10">
+                    <div class="text-blood mb-8 text-3xl font-light">🔧</div>
+                    <h3 class="font-cinematic text-xl text-white tracking-[0.1em] mb-4">Cross-Platform</h3>
+                    <p class="text-sm font-light text-silver leading-relaxed mb-6">
+                        Windows, Linux, macOS supported with identical security guarantees, featuring full Docker deployment readiness.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="security" class="relative z-10 py-32 px-6 bg-abyss border-y border-white/5">
+        <div class="max-w-7xl mx-auto">
+            <div class="text-center mb-20">
+                <h2 class="font-cinematic text-4xl text-white tracking-[0.1em]">Security First Architecture</h2>
+                <p class="text-silver mt-4 font-light max-w-2xl mx-auto">Built with security at every layer. Your secrets are protected by multiple lines of defense.</p>
+                <div class="w-px h-16 bg-gradient-to-b from-blood to-transparent mx-auto mt-10"></div>
+            </div>
+
+            <div class="grid grid-cols-2 md:grid-cols-3 gap-6">
+                <div class="smoked-glass p-8 text-center">
+                    <div class="text-3xl mb-4 text-blood">🔒</div>
+                    <h4 class="font-cinematic text-white tracking-widest mb-2">Zero-Knowledge</h4>
+                    <p class="text-xs text-silver font-light">Your secrets stay encrypted until delivery</p>
+                </div>
+                <div class="smoked-glass p-8 text-center">
+                    <div class="text-3xl mb-4 text-blood">🛡️</div>
+                    <h4 class="font-cinematic text-white tracking-widest mb-2">API Auth</h4>
+                    <p class="text-xs text-silver font-light">Secure API key authentication for all endpoints</p>
+                </div>
+                <div class="smoked-glass p-8 text-center">
+                    <div class="text-3xl mb-4 text-blood">⏱️</div>
+                    <h4 class="font-cinematic text-white tracking-widest mb-2">Rate Limiting</h4>
+                    <p class="text-xs text-silver font-light">Strict limits to prevent abuse and brute-forcing</p>
+                </div>
+                <div class="smoked-glass p-8 text-center">
+                    <div class="text-3xl mb-4 text-blood">🧹</div>
+                    <h4 class="font-cinematic text-white tracking-widest mb-2">Memory Security</h4>
+                    <p class="text-xs text-silver font-light">Secure deletion with memory barriers</p>
+                </div>
+                <div class="smoked-glass p-8 text-center">
+                    <div class="text-3xl mb-4 text-blood">✅</div>
+                    <h4 class="font-cinematic text-white tracking-widest mb-2">Input Validation</h4>
+                    <p class="text-xs text-silver font-light">Comprehensive payload sanitization</p>
+                </div>
+                <div class="smoked-glass p-8 text-center">
+                    <div class="text-3xl mb-4 text-blood">📋</div>
+                    <h4 class="font-cinematic text-white tracking-widest mb-2">Security Headers</h4>
+                    <p class="text-xs text-silver font-light">CSP, X-Frame-Options, and robust protections</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="pricing" class="relative z-10 py-32 px-6">
+        <div class="max-w-6xl mx-auto">
+            <div class="text-center mb-20">
+                <h2 class="font-cinematic text-4xl text-white tracking-[0.1em]">Transparent Licensing</h2>
+                <p class="text-silver mt-4 font-light">Choose the tier that fits your operational requirements.</p>
+            </div>
+
+            <div class="grid md:grid-cols-3 gap-8 items-center">
+                <div class="smoked-glass p-10 text-center">
+                    <h3 class="font-cinematic text-2xl text-white tracking-widest mb-2">Free</h3>
+                    <div class="font-mono text-4xl text-white mb-8">$0<span class="text-sm text-silver font-sans">/forever</span></div>
+                    <ul class="space-y-4 text-sm font-light text-silver mb-10 text-left">
+                        <li class="flex items-center gap-3"><span class="text-blood">✓</span> Complete self-hosted switch</li>
+                        <li class="flex items-center gap-3"><span class="text-blood">✓</span> Military-grade encryption</li>
+                        <li class="flex items-center gap-3"><span class="text-blood">✓</span> Web dashboard access</li>
+                        <li class="flex items-center gap-3"><span class="text-blood">✓</span> Community support</li>
+                    </ul>
+                    <a href="#execution" class="block w-full py-3 border border-white/20 text-white font-cinematic uppercase tracking-widest hover:bg-white/10 transition-colors">Deploy</a>
+                </div>
+
+                <div class="smoked-glass pricing-highlight p-10 text-center transform md:-translate-y-4 relative">
+                    <div class="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-blood text-white font-mono text-[10px] px-4 py-1 uppercase tracking-widest">Recommended</div>
+                    <h3 class="font-cinematic text-2xl text-white tracking-widest mb-2">Managed Cloud</h3>
+                    <div class="font-mono text-5xl text-white mb-8">$49<span class="text-sm text-silver font-sans">/month</span></div>
+                    <ul class="space-y-4 text-sm font-light text-silver mb-10 text-left">
+                        <li class="flex items-center gap-3"><span class="text-blood">✓</span> Everything in Free</li>
+                        <li class="flex items-center gap-3"><span class="text-blood">✓</span> Fully hosted instance</li>
+                        <li class="flex items-center gap-3"><span class="text-blood">✓</span> Automatic updates</li>
+                        <li class="flex items-center gap-3"><span class="text-blood">✓</span> 24/7 endpoint monitoring</li>
+                        <li class="flex items-center gap-3"><span class="text-blood">✓</span> Priority support & SSL</li>
+                    </ul>
+                    <a href="#execution" class="btn-cinematic block w-full py-3 text-white font-cinematic uppercase tracking-widest">Subscribe</a>
+                </div>
+
+                <div class="smoked-glass p-10 text-center">
+                    <h3 class="font-cinematic text-2xl text-white tracking-widest mb-2">Enterprise</h3>
+                    <div class="font-mono text-4xl text-white mb-8">$499<span class="text-sm text-silver font-sans">/month</span></div>
+                    <ul class="space-y-4 text-sm font-light text-silver mb-10 text-left">
+                        <li class="flex items-center gap-3"><span class="text-blood">✓</span> Everything in Managed</li>
+                        <li class="flex items-center gap-3"><span class="text-blood">✓</span> White-label solution</li>
+                        <li class="flex items-center gap-3"><span class="text-blood">✓</span> API access</li>
+                        <li class="flex items-center gap-3"><span class="text-blood">✓</span> SLA guarantees</li>
+                    </ul>
+                    <a href="#execution" class="block w-full py-3 border border-white/20 text-white font-cinematic uppercase tracking-widest hover:bg-white/10 transition-colors">Contact Sales</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="testimonials" class="relative z-10 py-32 px-6 bg-abyss border-t border-white/5">
+        <div class="max-w-7xl mx-auto">
+            <div class="text-center mb-20">
+                <h2 class="font-cinematic text-4xl text-white tracking-[0.1em]">Archives of Trust</h2>
+                <p class="text-silver mt-4 font-light">Trusted by high-net-worth individuals to secure their legacy.</p>
+            </div>
+
+            <div class="grid md:grid-cols-3 gap-8">
+                <div class="smoked-glass p-10">
+                    <div class="text-blood text-4xl font-cinematic mb-6">"</div>
+                    <p class="text-silver font-light italic leading-relaxed mb-8">Lazarus Protocol gives me peace of mind knowing my digital assets will be passed to my family if something happens to me. The self-hosted aspect is crucial for my security.</p>
+                    <div>
+                        <h4 class="font-cinematic text-white tracking-widest">Alex Chen</h4>
+                        <p class="text-xs text-blood font-mono uppercase tracking-widest mt-1">Crypto Investor, $500K+ Portfolio</p>
+                    </div>
+                </div>
+                <div class="smoked-glass p-10">
+                    <div class="text-blood text-4xl font-cinematic mb-6">"</div>
+                    <p class="text-silver font-light italic leading-relaxed mb-8">The military-grade encryption and zero-knowledge architecture are exactly what I needed. Finally, a dead man's switch that doesn't require trusting a third party.</p>
+                    <div>
+                        <h4 class="font-cinematic text-white tracking-widest">Sarah Mitchell</h4>
+                        <p class="text-xs text-blood font-mono uppercase tracking-widest mt-1">DeFi Trader, $1M+ Portfolio</p>
+                    </div>
+                </div>
+                <div class="smoked-glass p-10">
+                    <div class="text-blood text-4xl font-cinematic mb-6">"</div>
+                    <p class="text-silver font-light italic leading-relaxed mb-8">Setup was straightforward and the web dashboard is intuitive. I love that I can host it myself and maintain complete control over my private keys.</p>
+                    <div>
+                        <h4 class="font-cinematic text-white tracking-widest">Marcus Johnson</h4>
+                        <p class="text-xs text-blood font-mono uppercase tracking-widest mt-1">Bitcoin Holder, $250K+ Portfolio</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="execution" class="relative z-10 py-32 px-6 border-t border-white/5">
+        <div class="max-w-4xl mx-auto">
+            <h2 class="font-cinematic text-4xl text-white tracking-[0.1em] text-center mb-16">Initialize Protocol</h2>
+            
+            <div class="border border-white/10 bg-[#050505] shadow-[0_0_50px_rgba(0,0,0,1)] relative overflow-hidden">
+                <div class="flex items-center px-4 py-3 bg-[#0a0a0a] border-b border-white/10">
+                    <div class="flex gap-2">
+                        <div class="w-3 h-3 rounded-full bg-white/20"></div>
+                        <div class="w-3 h-3 rounded-full bg-white/20"></div>
+                        <div class="w-3 h-3 rounded-full bg-white/20"></div>
+                    </div>
+                    <span class="ml-4 font-mono text-[10px] text-white/40 tracking-widest uppercase">Lazarus Command Line Interface</span>
+                </div>
+                
+                <div class="p-8 font-mono text-sm leading-loose">
+                    <p class="text-white/40 mb-1"># Install from PyPI</p>
+                    <p class="mb-6"><span class="text-blood">❯</span> <span class="text-silver">pip install lazarus-protocol</span></p>
+                    
+                    <p class="text-white/40 mb-1"># Initialize and configure</p>
+                    <p><span class="text-blood">❯</span> <span class="text-silver">lazarus init</span></p>
+                    <p class="mb-6"><span class="text-blood">❯</span> <span class="text-silver">lazarus setup</span></p>
+                    
+                    <p class="text-white/40 mb-1"># Start the background monitoring agent</p>
+                    <p class="mb-6"><span class="text-blood">❯</span> <span class="text-silver">lazarus agent start --daemon</span></p>
+                    
+                    <p class="text-white/40 mb-1"># Perform manual check-in (resets the countdown)</p>
+                    <p><span class="text-blood">❯</span> <span class="text-silver">lazarus ping</span></p>
+                </div>
+
+                <div class="px-8 py-4 bg-[#0a0a0a] border-t border-white/10 flex justify-between items-center">
+                    <span class="font-mono text-[10px] text-white/40 uppercase tracking-widest">Supports Python 3.10+ & Docker</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer class="relative z-10 border-t border-white/5 bg-black pt-20 pb-10 px-6">
+        <div class="max-w-7xl mx-auto">
+            <div class="text-center mb-20">
+                <h2 class="font-cinematic text-3xl md:text-5xl text-white mb-6 tracking-widest">Ready to Protect Your Digital Legacy?</h2>
+                <p class="text-silver font-light mb-10 max-w-2xl mx-auto">Join thousands of crypto holders who trust Lazarus Protocol to protect their digital assets. Get started in minutes.</p>
+                <div class="flex justify-center gap-6">
+                    <a href="https://github.com/ravikumarve/lazarus" class="btn-cinematic px-8 py-3 font-cinematic text-sm tracking-[0.2em] text-white uppercase inline-block">Start Free Now</a>
+                    <a href="https://github.com/ravikumarve/lazarus/blob/main/QUICKSTART.md" class="px-8 py-3 font-cinematic text-sm tracking-[0.2em] text-silver uppercase border border-white/10 hover:border-white/40 transition-colors">Read Documentation</a>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-12 mb-16 border-t border-white/10 pt-16">
+                <div>
+                    <h4 class="font-cinematic text-white tracking-widest mb-6 uppercase">Product</h4>
+                    <ul class="space-y-4 font-mono text-xs text-silver tracking-widest uppercase">
+                        <li><a href="#threats" class="hover:text-blood transition-colors">Features</a></li>
+                        <li><a href="#security" class="hover:text-blood transition-colors">Security</a></li>
+                        <li><a href="#pricing" class="hover:text-blood transition-colors">Pricing</a></li>
+                        <li><a href="https://github.com/ravikumarve/lazarus/blob/main/QUICKSTART.md" class="hover:text-blood transition-colors">Documentation</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 class="font-cinematic text-white tracking-widest mb-6 uppercase">Resources</h4>
+                    <ul class="space-y-4 font-mono text-xs text-silver tracking-widest uppercase">
+                        <li><a href="https://github.com/ravikumarve/lazarus" class="hover:text-blood transition-colors">GitHub</a></li>
+                        <li><a href="https://github.com/ravikumarve/lazarus/issues" class="hover:text-blood transition-colors">Issues</a></li>
+                        <li><a href="https://github.com/ravikumarve/lazarus/blob/main/CONTRIBUTING.md" class="hover:text-blood transition-colors">Contributing</a></li>
+                        <li><a href="https://github.com/ravikumarve/lazarus/blob/main/LICENSE" class="hover:text-blood transition-colors">License</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 class="font-cinematic text-white tracking-widest mb-6 uppercase">Community</h4>
+                    <ul class="space-y-4 font-mono text-xs text-silver tracking-widest uppercase">
+                        <li><a href="https://github.com/ravikumarve/lazarus/stargazers" class="hover:text-blood transition-colors">Star on GitHub</a></li>
+                        <li><a href="https://github.com/ravikumarve/lazarus/blob/main/FAQ.md" class="hover:text-blood transition-colors">FAQ</a></li>
+                        <li><a href="https://github.com/ravikumarve/lazarus/discussions" class="hover:text-blood transition-colors">Discussions</a></li>
+                        <li><a href="mailto:ravikumarve@protonmail.com" class="hover:text-blood transition-colors">Contact</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 class="font-cinematic text-white tracking-widest mb-6 uppercase">Legal</h4>
+                    <ul class="space-y-4 font-mono text-xs text-silver tracking-widest uppercase">
+                        <li><a href="#" class="hover:text-blood transition-colors">Privacy Policy</a></li>
+                        <li><a href="#" class="hover:text-blood transition-colors">Terms of Service</a></li>
+                        <li><a href="https://github.com/ravikumarve/lazarus/blob/main/LICENSE" class="hover:text-blood transition-colors">MIT License</a></li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="border-t border-white/10 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
+                <span class="font-cinematic text-xl tracking-[0.2em] text-white">LAZARUS</span>
+                <p class="font-mono text-[10px] tracking-[0.1em] text-silver text-center uppercase">
+                    &copy; 2026 Lazarus Protocol. All rights reserved.<br />Built with paranoia and love for the people who hold their own keys.
+                </p>
+            </div>
+        </div>
+    </footer>
+
+</body>
+</html>
