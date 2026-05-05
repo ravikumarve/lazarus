@@ -136,16 +136,22 @@ class TestExponentialBackoff:
         in_memory_rate_limiter.config.requests = 3
         in_memory_rate_limiter.config.backoff_base = 2
         
-        # Exceed limit multiple times
+        # Exceed limit multiple times within same window
         retry_afters = []
         for i in range(10):
             result = in_memory_rate_limiter.is_allowed(identifier)
             if not result.allowed and result.retry_after:
                 retry_afters.append(result.retry_after)
+                # Only check first few backoffs before reset
+                if len(retry_afters) >= 2:
+                    break
         
         # Check backoff increases (at least initially)
         if len(retry_afters) >= 2:
-            assert retry_afters[1] >= retry_afters[0]
+            # The first backoff should be smaller than the second
+            # because count increases with each violation
+            assert retry_afters[1] >= retry_afters[0], \
+                f"Expected backoff to increase, got {retry_afters[0]} then {retry_afters[1]}"
 
     def test_backoff_max_limit(self, in_memory_rate_limiter):
         """Test backoff doesn't exceed maximum"""

@@ -137,7 +137,24 @@ class DistributedRateLimiter:
             if backoff:
                 backoff_end = float(backoff)
                 if time.time() < backoff_end:
-                    retry_after = int(backoff_end - time.time())
+                    # Increment count to track violations during backoff
+                    count = int(count) if count else 0
+                    count += 1
+                    # Recalculate backoff with increased count
+                    backoff_time = min(
+                        self.config.backoff_base ** (count - self.config.requests + 1),
+                        self.config.backoff_max
+                    )
+                    # Update backoff time if it increased
+                    new_backoff_end = time.time() + backoff_time
+                    if new_backoff_end > backoff_end:
+                        pipe.set(f"{key}:backoff", new_backoff_end, ex=backoff_time)
+                        pipe.execute()
+                        retry_after = backoff_time
+                    else:
+                        pipe.execute()
+                        retry_after = int(backoff_end - time.time())
+                    
                     return RateLimitResult(
                         allowed=False,
                         retry_after=retry_after,
@@ -216,6 +233,18 @@ class DistributedRateLimiter:
         
         # Check if in backoff period
         if entry["backoff_until"] and now < entry["backoff_until"]:
+            # Increment count to track violations during backoff
+            entry["count"] += 1
+            # Recalculate backoff with increased count
+            backoff_time = min(
+                self.config.backoff_base ** (entry["count"] - self.config.requests + 1),
+                self.config.backoff_max
+            )
+            # Update backoff time if it increased
+            new_backoff_until = now + backoff_time
+            if new_backoff_until > entry["backoff_until"]:
+                entry["backoff_until"] = new_backoff_until
+            
             retry_after = int(entry["backoff_until"] - now)
             return RateLimitResult(
                 allowed=False,
