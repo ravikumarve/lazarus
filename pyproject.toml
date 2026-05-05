@@ -4,6 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lazarus-protocol"
+version = "1.0.0"
 description = "Self-hosted dead man's switch for crypto holders"
 readme = "README.md"
 requires-python = ">=3.10"

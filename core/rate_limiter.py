@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 import time
+import threading
 from dataclasses import dataclass
 from typing import Optional, Tuple, Dict, Any
 from datetime import datetime, timedelta
@@ -84,6 +85,10 @@ class DistributedRateLimiter:
             self.use_redis = False
             # Fallback to in-memory storage
             self._in_memory_storage: Dict[str, Dict[str, Any]] = {}
+            # Thread-safe locks for in-memory storage
+            self._storage_lock = threading.RLock()  # Reentrant lock for storage access
+            self._key_locks: Dict[str, threading.Lock] = {}  # Per-key locks for fine-grained control
+            self._key_locks_lock = threading.Lock()  # Lock for managing key_locks dictionary
             logging.warning("Using in-memory rate limiting (not distributed)")
         
         self._logger = logging.getLogger("lazarus.rate_limiter")
@@ -217,75 +222,98 @@ class DistributedRateLimiter:
             # Fallback to allow request if Redis fails
             return RateLimitResult(allowed=True, reason="Rate limiting error, allowing request")
 
+    def _get_key_lock(self, key: str) -> threading.Lock:
+        """
+        Get or create a lock for a specific key.
+        
+        This provides fine-grained locking - each key has its own lock,
+        allowing concurrent access to different keys while preventing
+        race conditions on the same key.
+        
+        Args:
+            key: The rate limit key
+            
+        Returns:
+            Lock for the specific key
+        """
+        with self._key_locks_lock:
+            if key not in self._key_locks:
+                self._key_locks[key] = threading.Lock()
+            return self._key_locks[key]
+
     def _is_allowed_in_memory(self, key: str, identifier: str) -> RateLimitResult:
-        """Check rate limit using in-memory storage (fallback)"""
-        now = time.time()
+        """Check rate limit using in-memory storage (fallback) with thread safety"""
+        # Get per-key lock for this specific identifier
+        key_lock = self._get_key_lock(key)
         
-        # Get or create entry
-        if key not in self._in_memory_storage:
-            self._in_memory_storage[key] = {
-                "count": 0,
-                "window_start": now,
-                "backoff_until": None
-            }
-        
-        entry = self._in_memory_storage[key]
-        
-        # Check if in backoff period
-        if entry["backoff_until"] and now < entry["backoff_until"]:
-            # Increment count to track violations during backoff
+        with key_lock:
+            now = time.time()
+            
+            # Get or create entry (thread-safe with key lock)
+            if key not in self._in_memory_storage:
+                self._in_memory_storage[key] = {
+                    "count": 0,
+                    "window_start": now,
+                    "backoff_until": None
+                }
+            
+            entry = self._in_memory_storage[key]
+            
+            # Check if in backoff period
+            if entry["backoff_until"] and now < entry["backoff_until"]:
+                # Increment count to track violations during backoff
+                entry["count"] += 1
+                # Recalculate backoff with increased count
+                backoff_time = min(
+                    self.config.backoff_base ** (entry["count"] - self.config.requests + 1),
+                    self.config.backoff_max
+                )
+                # Update backoff time if it increased
+                new_backoff_until = now + backoff_time
+                if new_backoff_until > entry["backoff_until"]:
+                    entry["backoff_until"] = new_backoff_until
+                
+                retry_after = int(entry["backoff_until"] - now)
+                return RateLimitResult(
+                    allowed=False,
+                    retry_after=retry_after,
+                    reason="Rate limit exceeded, backoff active"
+                )
+            
+            # Reset if window expired
+            if now - entry["window_start"] > self.config.window:
+                entry["count"] = 0
+                entry["window_start"] = now
+                entry["backoff_until"] = None
+            
+            # Check if limit exceeded
+            if entry["count"] >= self.config.requests:
+                # Calculate exponential backoff
+                backoff_time = min(
+                    self.config.backoff_base ** (entry["count"] - self.config.requests + 1),
+                    self.config.backoff_max
+                )
+                entry["backoff_until"] = now + backoff_time
+                
+                return RateLimitResult(
+                    allowed=False,
+                    retry_after=backoff_time,
+                    reason=f"Rate limit exceeded ({entry['count']}/{self.config.requests})"
+                )
+            
+            # Increment counter
             entry["count"] += 1
-            # Recalculate backoff with increased count
-            backoff_time = min(
-                self.config.backoff_base ** (entry["count"] - self.config.requests + 1),
-                self.config.backoff_max
-            )
-            # Update backoff time if it increased
-            new_backoff_until = now + backoff_time
-            if new_backoff_until > entry["backoff_until"]:
-                entry["backoff_until"] = new_backoff_until
             
-            retry_after = int(entry["backoff_until"] - now)
-            return RateLimitResult(
-                allowed=False,
-                retry_after=retry_after,
-                reason="Rate limit exceeded, backoff active"
-            )
-        
-        # Reset if window expired
-        if now - entry["window_start"] > self.config.window:
-            entry["count"] = 0
-            entry["window_start"] = now
-            entry["backoff_until"] = None
-        
-        # Check if limit exceeded
-        if entry["count"] >= self.config.requests:
-            # Calculate exponential backoff
-            backoff_time = min(
-                self.config.backoff_base ** (entry["count"] - self.config.requests + 1),
-                self.config.backoff_max
-            )
-            entry["backoff_until"] = now + backoff_time
+            # Calculate remaining
+            remaining = self.config.requests - entry["count"]
+            reset_at = datetime.fromtimestamp(entry["window_start"] + self.config.window)
             
             return RateLimitResult(
-                allowed=False,
-                retry_after=backoff_time,
-                reason=f"Rate limit exceeded ({entry['count']}/{self.config.requests})"
+                allowed=True,
+                remaining=remaining,
+                reset_at=reset_at,
+                limit=self.config.requests
             )
-        
-        # Increment counter
-        entry["count"] += 1
-        
-        # Calculate remaining
-        remaining = self.config.requests - entry["count"]
-        reset_at = datetime.fromtimestamp(entry["window_start"] + self.config.window)
-        
-        return RateLimitResult(
-            allowed=True,
-            remaining=remaining,
-            reset_at=reset_at,
-            limit=self.config.requests
-        )
 
     def _check_ip_reputation(self, ip: str) -> bool:
         """Check IP reputation and block if suspicious"""
@@ -372,7 +400,7 @@ class DistributedRateLimiter:
             }
 
     def cleanup(self) -> None:
-        """Clean up old entries"""
+        """Clean up old entries (thread-safe for in-memory storage)"""
         if self.use_redis:
             try:
                 # Redis automatically expires keys, but we can force cleanup
@@ -388,24 +416,29 @@ class DistributedRateLimiter:
             except Exception as e:
                 self._logger.error(f"Error during cleanup: {e}")
         else:
-            # Clean up in-memory storage
-            now = time.time()
-            to_delete = []
-            
-            for key, entry in self._in_memory_storage.items():
-                # Remove entries that are outside window and not in backoff
-                if now - entry["window_start"] > self.config.window and not entry["backoff_until"]:
-                    to_delete.append(key)
-            
-            for key in to_delete:
-                del self._in_memory_storage[key]
-            
-            if to_delete:
-                self._logger.info(f"Cleaned up {len(to_delete)} expired in-memory entries")
+            # Clean up in-memory storage (thread-safe)
+            with self._storage_lock:
+                now = time.time()
+                to_delete = []
+                
+                for key, entry in self._in_memory_storage.items():
+                    # Remove entries that are outside window and not in backoff
+                    if now - entry["window_start"] > self.config.window and not entry["backoff_until"]:
+                        to_delete.append(key)
+                
+                for key in to_delete:
+                    del self._in_memory_storage[key]
+                    # Also clean up the key lock
+                    with self._key_locks_lock:
+                        if key in self._key_locks:
+                            del self._key_locks[key]
+                
+                if to_delete:
+                    self._logger.info(f"Cleaned up {len(to_delete)} expired in-memory entries")
 
     def reset(self, identifier: str, user_id: Optional[str] = None) -> bool:
         """
-        Reset rate limit for a specific identifier.
+        Reset rate limit for a specific identifier (thread-safe for in-memory storage).
         
         Args:
             identifier: IP address or unique identifier
@@ -428,8 +461,15 @@ class DistributedRateLimiter:
                 self._logger.error(f"Error resetting rate limit: {e}")
                 return False
         else:
-            if key in self._in_memory_storage:
-                del self._in_memory_storage[key]
+            # Thread-safe reset for in-memory storage
+            key_lock = self._get_key_lock(key)
+            with key_lock:
+                if key in self._in_memory_storage:
+                    del self._in_memory_storage[key]
+                # Also clean up the key lock
+                with self._key_locks_lock:
+                    if key in self._key_locks:
+                        del self._key_locks[key]
             return True
 
 
