@@ -15,6 +15,7 @@ from fastapi import FastAPI, HTTPException, Request, Response, status
 from fastapi.responses import HTMLResponse, FileResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from typing import Optional
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -344,7 +345,7 @@ def pricing():
 
 
 @app.get("/status")
-async def status(request: Request):
+async def get_status(request: Request):
     """Get current Lazarus status. Requires authentication."""
     # Verify API key
     credentials = await security(request)

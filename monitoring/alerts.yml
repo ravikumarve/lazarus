@@ -1,0 +1,254 @@
+# Alert Rules for Lazarus Protocol
+
+groups:
+  - name: api_alerts
+    interval: 30s
+    rules:
+      - alert: HighErrorRate
+        expr: |
+          rate(api_requests_total{status=~"5.."}[5m])
+          / rate(api_requests_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          team: backend
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value | humanizePercentage }} for endpoint {{ $labels.endpoint }}"
+          runbook_url: "https://docs.lazarus-protocol.com/runbooks/high-error-rate"
+
+      - alert: HighLatency
+        expr: |
+          histogram_quantile(0.95, rate(api_request_duration_seconds_bucket[5m])) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          team: backend
+        annotations:
+          summary: "High API latency detected"
+          description: "P95 latency is {{ $value }}s for endpoint {{ $labels.endpoint }}"
+          runbook_url: "https://docs.lazarus-protocol.com/runbooks/high-latency"
+
+      - alert: VeryHighLatency
+        expr: |
+          histogram_quantile(0.95, rate(api_request_duration_seconds_bucket[5m])) > 2.0
+        for: 2m
+        labels:
+          severity: critical
+          team: backend
+        annotations:
+          summary: "Very high API latency detected"
+          description: "P95 latency is {{ $value }}s for endpoint {{ $labels.endpoint }}"
+          runbook_url: "https://docs.lazarus-protocol.com/runbooks/very-high-latency"
+
+  - name: storage_alerts
+    interval: 30s
+    rules:
+      - alert: StorageUploadFailure
+        expr: |
+          rate(storage_uploads_total{status="error"}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: critical
+          team: backend
+        annotations:
+          summary: "Storage upload failures detected"
+          description: "Storage upload error rate is {{ $value }} for provider {{ $labels.provider }}"
+          runbook_url: "https://docs.lazarus-protocol.com/runbooks/storage-upload-failure"
+
+      - alert: StorageDownloadFailure
+        expr: |
+          rate(storage_downloads_total{status="error"}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: critical
+          team: backend
+        annotations:
+          summary: "Storage download failures detected"
+          description: "Storage download error rate is {{ $value }} for provider {{ $labels.provider }}"
+          runbook_url: "https://docs.lazarus-protocol.com/runbooks/storage-download-failure"
+
+      - alert: SlowStorageUpload
+        expr: |
+          histogram_quantile(0.95, rate(storage_upload_duration_seconds_bucket[5m])) > 300
+        for: 10m
+        labels:
+          severity: warning
+          team: backend
+        annotations:
+          summary: "Slow storage uploads detected"
+          description: "P95 upload duration is {{ $value }}s for provider {{ $labels.provider }}"
+          runbook_url: "https://docs.lazarus-protocol.com/runbooks/slow-storage-upload"
+
+  - name: email_alerts
+    interval: 30s
+    rules:
+      - alert: EmailSendFailure
+        expr: |
+          rate(email_sends_total{status="error"}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: critical
+          team: backend
+        annotations:
+          summary: "Email send failures detected"
+          description: "Email send error rate is {{ $value }} for type {{ $labels.type }}"
+          runbook_url: "https://docs.lazarus-protocol.com/runbooks/email-send-failure"
+
+      - alert: SlowEmailSend
+        expr: |
+          histogram_quantile(0.95, rate(email_send_duration_seconds_bucket[5m])) > 30
+        for: 10m
+        labels:
+          severity: warning
+          team: backend
+        annotations:
+          summary: "Slow email sends detected"
+          description: "P95 email send duration is {{ $value }}s for type {{ $labels.type }}"
+          runbook_url: "https://docs.lazarus-protocol.com/runbooks/slow-email-send"
+
+  - name: system_alerts
+    interval: 30s
+    rules:
+      - alert: HighMemoryUsage
+        expr: memory_usage_bytes / 1024 / 1024 > 1024
+        for: 10m
+        labels:
+          severity: warning
+          team: devops
+        annotations:
+          summary: "High memory usage detected"
+          description: "Memory usage is {{ $value }}MB"
+          runbook_url: "https://docs.lazarus-protocol.com/runbooks/high-memory-usage"
+
+      - alert: CriticalMemoryUsage
+        expr: memory_usage_bytes / 1024 / 1024 > 2048
+        for: 5m
+        labels:
+          severity: critical
+          team: devops
+        annotations:
+          summary: "Critical memory usage detected"
+          description: "Memory usage is {{ $value }}MB"
+          runbook_url: "https://docs.lazarus-protocol.com/runbooks/critical-memory-usage"
+
+      - alert: HighCPUUsage
+        expr: cpu_usage_percent > 80
+        for: 10m
+        labels:
+          severity: warning
+          team: devops
+        annotations:
+          summary: "High CPU usage detected"
+          description: "CPU usage is {{ $value }}%"
+          runbook_url: "https://docs.lazarus-protocol.com/runbooks/high-cpu-usage"
+
+      - alert: CriticalCPUUsage
+        expr: cpu_usage_percent > 95
+        for: 5m
+        labels:
+          severity: critical
+          team: devops
+        annotations:
+          summary: "Critical CPU usage detected"
+          description: "CPU usage is {{ $value }}%"
+          runbook_url: "https://docs.lazarus-protocol.com/runbooks/critical-cpu-usage"
+
+      - alert: HighDiskUsage
+        expr: |
+          (disk_usage_bytes{mount_point="/"} / 
+           (disk_usage_bytes{mount_point="/"} + 1)) > 0.9
+        for: 10m
+        labels:
+          severity: warning
+          team: devops
+        annotations:
+          summary: "High disk usage detected"
+          description: "Disk usage is {{ $value | humanizePercentage }} on {{ $labels.mount_point }}"
+          runbook_url: "https://docs.lazarus-protocol.com/runbooks/high-disk-usage"
+
+      - alert: CriticalDiskUsage
+        expr: |
+          (disk_usage_bytes{mount_point="/"} / 
+           (disk_usage_bytes{mount_point="/"} + 1)) > 0.95
+        for: 5m
+        labels:
+          severity: critical
+          team: devops
+        annotations:
+          summary: "Critical disk usage detected"
+          description: "Disk usage is {{ $value | humanizePercentage }} on {{ $labels.mount_point }}"
+          runbook_url: "https://docs.lazarus-protocol.com/runbooks/critical-disk-usage"
+
+  - name: business_alerts
+    interval: 60s
+    rules:
+      - alert: NoActiveConfigurations
+        expr: active_configurations == 0
+        for: 15m
+        labels:
+          severity: warning
+          team: support
+        annotations:
+          summary: "No active configurations detected"
+          description: "System has no active configurations"
+          runbook_url: "https://docs.lazarus-protocol.com/runbooks/no-active-configurations"
+
+      - alert: HighPendingCheckins
+        expr: pending_checkins > 10
+        for: 30m
+        labels:
+          severity: warning
+          team: support
+        annotations:
+          summary: "High number of pending check-ins"
+          description: "{{ $value }} pending check-ins detected"
+          runbook_url: "https://docs.lazarus-protocol.com/runbooks/high-pending-checkins"
+
+      - alert: CriticalPendingCheckins
+        expr: pending_checkins > 50
+        for: 15m
+        labels:
+          severity: critical
+          team: support
+        annotations:
+          summary: "Critical number of pending check-ins"
+          description: "{{ $value }} pending check-ins detected"
+          runbook_url: "https://docs.lazarus-protocol.com/runbooks/critical-pending-checkins"
+
+      - alert: HighStorageUsage
+        expr: total_storage_bytes / 1024 / 1024 / 1024 > 10
+        for: 30m
+        labels:
+          severity: warning
+          team: devops
+        annotations:
+          summary: "High storage usage detected"
+          description: "Storage usage is {{ $value | humanize1024 }}B"
+          runbook_url: "https://docs.lazarus-protocol.com/runbooks/high-storage-usage"
+
+  - name: availability_alerts
+    interval: 30s
+    rules:
+      - alert: ServiceDown
+        expr: up{job="lazarus-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          team: devops
+        annotations:
+          summary: "Service is down"
+          description: "Lazarus Protocol API service is down"
+          runbook_url: "https://docs.lazarus-protocol.com/runbooks/service-down"
+
+      - alert: LowRequestRate
+        expr: |
+          rate(api_requests_total[5m]) < 0.1
+        for: 15m
+        labels:
+          severity: warning
+          team: support
+        annotations:
+          summary: "Low request rate detected"
+          description: "Request rate is {{ $value }} requests/sec"
+          runbook_url: "https://docs.lazarus-protocol.com/runbooks/low-request-rate"
