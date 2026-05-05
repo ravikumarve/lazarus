@@ -8,22 +8,40 @@ Provides:
 - Input validation
 - Path traversal protection
 - Security headers
+- Server-side key management
+- PBKDF2 key derivation
 """
 
 from __future__ import annotations
 
+import asyncio
+import hashlib
+import logging
 import os
 import re
 import secrets
+import threading
 import time
 from collections import defaultdict
+from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import datetime, timedelta, UTC
 from functools import wraps
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable, Optional, Dict
 
 from fastapi import HTTPException, Request, Response, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+
+# Try to import cryptography for PBKDF2
+try:
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+    from cryptography.hazmat.backends import default_backend
+    CRYPTOGRAPHY_AVAILABLE = True
+except ImportError:
+    CRYPTOGRAPHY_AVAILABLE = False
+    logging.warning("cryptography library not available, using fallback key derivation")
 
 
 # ---------------------------------------------------------------------------
@@ -39,6 +57,280 @@ ALLOWED_PATHS = [
     Path.home() / ".lazarus",
     Path.cwd(),
 ]
+
+# Key management constants
+ENCRYPTION_SALT_ENV = "LAZARUS_ENCRYPTION_SALT"
+PBKDF2_ITERATIONS = 100000
+SESSION_KEY_EXPIRY = 3600  # 1 hour
+KEY_ROTATION_INTERVAL = 86400  # 24 hours
+DEVICE_BINDING_WINDOW = 2592000  # 30 days
+
+
+# ---------------------------------------------------------------------------
+# Server-Side Key Management
+# ---------------------------------------------------------------------------
+
+@dataclass
+class SessionKey:
+    """Session key with metadata"""
+    key_id: str
+    key: str
+    session_id: str
+    user_agent: str
+    ip_address: str
+    created_at: datetime
+    expires_at: datetime
+    device_fingerprint: str
+
+
+class KeyManager:
+    """
+    Secure key management with server-side generation and PBKDF2 derivation.
+    
+    This class provides:
+    - Server-provided encryption keys
+    - PBKDF2 key derivation with 100,000+ iterations
+    - Key rotation mechanism
+    - Session and device binding
+    """
+
+    def __init__(self):
+        self.salt = self._get_or_generate_salt()
+        self.iterations = PBKDF2_ITERATIONS
+        self._session_keys: Dict[str, SessionKey] = {}
+        self._lock = threading.RLock()
+        self._cleanup_thread = None
+        self._stop_event = threading.Event()
+        self._start_cleanup_thread()
+
+    def _get_or_generate_salt(self) -> bytes:
+        """Get encryption salt from environment or generate one"""
+        salt_env = os.environ.get(ENCRYPTION_SALT_ENV)
+        if salt_env:
+            try:
+                return bytes.fromhex(salt_env)
+            except ValueError:
+                logging.warning("Invalid encryption salt in environment, generating new one")
+        
+        # Generate new salt
+        salt = secrets.token_bytes(32)
+        logging.info(f"Generated new encryption salt. Set {ENCRYPTION_SALT_ENV} environment variable to persist.")
+        return salt
+
+    def derive_key(self, password: str, context: str) -> bytes:
+        """
+        Derive encryption key using PBKDF2.
+
+        Args:
+            password: Password or seed for key derivation
+            context: Context string for key derivation (e.g., "session", "encryption")
+
+        Returns:
+            Derived key as bytes
+        """
+        if CRYPTOGRAPHY_AVAILABLE:
+            kdf = PBKDF2HMAC(
+                algorithm=hashes.SHA256(),
+                length=32,
+                salt=self.salt + context.encode(),
+                iterations=self.iterations,
+                backend=default_backend()
+            )
+            return kdf.derive(password.encode())
+        else:
+            # Fallback to hashlib if cryptography not available
+            return hashlib.pbkdf2_hmac(
+                'sha256',
+                password.encode(),
+                self.salt + context.encode(),
+                self.iterations
+            )
+
+    def generate_session_key(
+        self,
+        session_id: str,
+        user_agent: str,
+        ip_address: str,
+        device_fingerprint: Optional[str] = None
+    ) -> SessionKey:
+        """
+        Generate session-specific encryption key.
+
+        Args:
+            session_id: Unique session identifier
+            user_agent: User agent string for device binding
+            ip_address: IP address for session tracking
+            device_fingerprint: Optional device fingerprint for enhanced binding
+
+        Returns:
+            SessionKey object with derived key and metadata
+        """
+        key_id = secrets.token_urlsafe(16)
+        
+        # Derive key using session ID as password
+        key_bytes = self.derive_key(session_id, "session")
+        key_hex = key_bytes.hex()
+
+        # Generate device fingerprint if not provided
+        if not device_fingerprint:
+            device_fingerprint = self._generate_device_fingerprint(user_agent, ip_address)
+
+        # Create session key with expiry
+        now = datetime.now(UTC)
+        session_key = SessionKey(
+            key_id=key_id,
+            key=key_hex,
+            session_id=session_id,
+            user_agent=user_agent,
+            ip_address=ip_address,
+            created_at=now,
+            expires_at=now + timedelta(seconds=SESSION_KEY_EXPIRY),
+            device_fingerprint=device_fingerprint
+        )
+
+        # Store session key
+        with self._lock:
+            self._session_keys[key_id] = session_key
+
+        return session_key
+
+    def rotate_key(self, old_key_id: str, context: str = "rotation") -> Optional[SessionKey]:
+        """
+        Rotate encryption key for enhanced security.
+
+        Args:
+            old_key_id: ID of the key to rotate
+            context: Context for key rotation
+
+        Returns:
+            New SessionKey or None if old key not found
+        """
+        with self._lock:
+            old_session_key = self._session_keys.get(old_key_id)
+            if not old_session_key:
+                return None
+
+            # Generate new key with rotated context
+            new_key_id = secrets.token_urlsafe(16)
+            key_bytes = self.derive_key(old_session_key.session_id + "_rotated", context)
+            key_hex = key_bytes.hex()
+
+            # Create new session key
+            now = datetime.now(UTC)
+            new_session_key = SessionKey(
+                key_id=new_key_id,
+                key=key_hex,
+                session_id=old_session_key.session_id,
+                user_agent=old_session_key.user_agent,
+                ip_address=old_session_key.ip_address,
+                created_at=now,
+                expires_at=now + timedelta(seconds=SESSION_KEY_EXPIRY),
+                device_fingerprint=old_session_key.device_fingerprint
+            )
+
+            # Replace old key with new one
+            del self._session_keys[old_key_id]
+            self._session_keys[new_key_id] = new_session_key
+
+            return new_session_key
+
+    def validate_session_key(
+        self,
+        key_id: str,
+        user_agent: str,
+        ip_address: str
+    ) -> Optional[SessionKey]:
+        """
+        Validate session key and check device binding.
+
+        Args:
+            key_id: Key ID to validate
+            user_agent: Current user agent
+            ip_address: Current IP address
+
+        Returns:
+            SessionKey if valid, None otherwise
+        """
+        with self._lock:
+            session_key = self._session_keys.get(key_id)
+            if not session_key:
+                return None
+
+            # Check expiry
+            if datetime.now(UTC) > session_key.expires_at:
+                del self._session_keys[key_id]
+                return None
+
+            # Check device binding (user agent should match)
+            if session_key.user_agent != user_agent:
+                logging.warning(f"Device binding mismatch for key {key_id}: user agent changed")
+                return None
+
+            # Optional: Check IP address (allow some flexibility for mobile networks)
+            if session_key.ip_address != ip_address:
+                logging.info(f"IP address changed for key {key_id}: {session_key.ip_address} -> {ip_address}")
+
+            return session_key
+
+    def _generate_device_fingerprint(self, user_agent: str, ip_address: str) -> str:
+        """
+        Generate device fingerprint for session binding.
+
+        Args:
+            user_agent: User agent string
+            ip_address: IP address
+
+        Returns:
+            Device fingerprint hash
+        """
+        fingerprint_data = f"{user_agent}:{ip_address}".encode()
+        return hashlib.sha256(fingerprint_data).hexdigest()
+
+    def _start_cleanup_thread(self):
+        """Start background cleanup thread for expired keys"""
+        self._cleanup_thread = threading.Thread(
+            target=self._cleanup_loop,
+            daemon=True
+        )
+        self._cleanup_thread.start()
+
+    def _cleanup_loop(self):
+        """Background cleanup loop"""
+        while not self._stop_event.is_set():
+            try:
+                self._cleanup_expired_keys()
+                self._stop_event.wait(300)  # Check every 5 minutes
+            except Exception as e:
+                logging.error(f"Key cleanup error: {e}")
+
+    def _cleanup_expired_keys(self):
+        """Clean up expired session keys"""
+        with self._lock:
+            now = datetime.now(UTC)
+            expired_keys = [
+                key_id for key_id, session_key in self._session_keys.items()
+                if now > session_key.expires_at
+            ]
+
+            for key_id in expired_keys:
+                del self._session_keys[key_id]
+
+            if expired_keys:
+                logging.info(f"Cleaned up {len(expired_keys)} expired session keys")
+
+    def stop(self):
+        """Stop cleanup thread"""
+        self._stop_event.set()
+        if self._cleanup_thread:
+            self._cleanup_thread.join(timeout=5)
+
+    def __del__(self):
+        """Cleanup on deletion"""
+        self.stop()
+
+
+# Global key manager instance
+key_manager = KeyManager()
 
 
 # ---------------------------------------------------------------------------
@@ -426,7 +718,7 @@ def get_security_headers() -> dict[str, str]:
 # Security Logging
 # ---------------------------------------------------------------------------
 
-import logging
+import asyncio
 
 security_logger = logging.getLogger("lazarus.security")
 
@@ -450,10 +742,3 @@ def log_security_event(
         level,
         f"[{event_type}] IP={ip} Details={details}"
     )
-
-
-# ---------------------------------------------------------------------------
-# Async import for decorator
-# ---------------------------------------------------------------------------
-
-import asyncio

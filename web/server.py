@@ -37,25 +37,46 @@ from core.security import (
     sanitize_input,
     log_security_event,
     security,
+    key_manager,
 )
+from core.rate_limiter import get_distributed_rate_limiter, RateLimitConfig
 
 app = FastAPI(title="Lazarus Protocol Dashboard")
+
+# Initialize distributed rate limiter
+distributed_limiter = get_distributed_rate_limiter()
 
 # Add security middleware
 @app.middleware("http")
 async def security_middleware(request: Request, call_next):
-    """Apply security headers and rate limiting to all requests."""
-    # Check rate limit
+    """Apply security headers and distributed rate limiting to all requests."""
+    # Check distributed rate limit
     try:
-        check_rate_limit(request)
-    except HTTPException as e:
-        log_security_event(
-            "RATE_LIMIT",
-            request.client.host if request.client else "unknown",
-            f"Path: {request.url.path}",
-            level=30
-        )
+        ip_address = request.client.host if request.client else "unknown"
+        result = distributed_limiter.is_allowed(ip_address)
+        
+        if not result.allowed:
+            log_security_event(
+                "RATE_LIMIT",
+                ip_address,
+                f"Path: {request.url.path}, Reason: {result.reason}",
+                level=30
+            )
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Rate limit exceeded. {result.reason}",
+                headers={"Retry-After": str(result.retry_after)}
+            )
+    except HTTPException:
         raise
+    except Exception as e:
+        # Log error but allow request if rate limiting fails
+        log_security_event(
+            "RATE_LIMIT_ERROR",
+            request.client.host if request.client else "unknown",
+            f"Error: {str(e)}",
+            level=40
+        )
     
     # Process request
     response = await call_next(request)
@@ -63,6 +84,15 @@ async def security_middleware(request: Request, call_next):
     # Add security headers
     for key, value in get_security_headers().items():
         response.headers[key] = value
+    
+    # Add rate limit headers
+    ip_address = request.client.host if request.client else "unknown"
+    result = distributed_limiter.is_allowed(ip_address, check_ip_reputation=False)
+    if result.remaining is not None:
+        response.headers["X-RateLimit-Limit"] = str(result.limit)
+        response.headers["X-RateLimit-Remaining"] = str(result.remaining)
+        if result.reset_at:
+            response.headers["X-RateLimit-Reset"] = str(int(result.reset_at.timestamp()))
     
     return response
 
@@ -74,6 +104,145 @@ app.add_middleware(
     allow_methods=["GET", "POST", "DELETE"],
     allow_headers=["Authorization", "Content-Type", "X-CSRF-Token"],
 )
+
+# ---------------------------------------------------------------------------
+# Startup and Shutdown Events
+# ---------------------------------------------------------------------------
+
+import asyncio
+import threading
+import psutil
+import os
+
+_cleanup_interval = 300  # 5 minutes
+_memory_threshold = 1024 * 1024 * 1024  # 1GB
+_cleanup_task = None
+_stop_event = threading.Event()
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize cleanup and monitoring tasks on startup."""
+    global _cleanup_task
+    
+    # Start periodic cleanup task
+    _cleanup_task = asyncio.create_task(periodic_cleanup())
+    
+    # Log startup
+    log_security_event(
+        "SERVER_STARTUP",
+        "system",
+        "Lazarus Protocol server started",
+        level=20
+    )
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Cleanup on shutdown."""
+    global _cleanup_task, _stop_event
+    
+    # Stop cleanup task
+    _stop_event.set()
+    if _cleanup_task:
+        _cleanup_task.cancel()
+        try:
+            await _cleanup_task
+        except asyncio.CancelledError:
+            pass
+    
+    # Cleanup rate limiter
+    distributed_limiter.cleanup()
+    
+    # Stop key manager
+    key_manager.stop()
+    
+    # Log shutdown
+    log_security_event(
+        "SERVER_SHUTDOWN",
+        "system",
+        "Lazarus Protocol server stopped",
+        level=20
+    )
+
+
+async def periodic_cleanup():
+    """Periodic cleanup task for rate limiter and memory monitoring."""
+    while not _stop_event.is_set():
+        try:
+            # Cleanup rate limiter
+            distributed_limiter.cleanup()
+            
+            # Check memory usage
+            check_memory_usage()
+            
+            # Wait for next interval
+            await asyncio.sleep(_cleanup_interval)
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            log_security_event(
+                "CLEANUP_ERROR",
+                "system",
+                f"Error during periodic cleanup: {str(e)}",
+                level=40
+            )
+
+
+def check_memory_usage():
+    """Check memory usage and alert if threshold exceeded."""
+    try:
+        process = psutil.Process(os.getpid())
+        memory_info = process.memory_info()
+        memory_mb = memory_info.rss / 1024 / 1024
+        
+        if memory_mb > _memory_threshold / 1024 / 1024:
+            log_security_event(
+                "MEMORY_WARNING",
+                "system",
+                f"Memory usage {memory_mb:.2f}MB exceeds threshold",
+                level=30
+            )
+            
+            # Trigger aggressive cleanup
+            aggressive_cleanup()
+    except Exception as e:
+        log_security_event(
+            "MEMORY_CHECK_ERROR",
+            "system",
+            f"Error checking memory usage: {str(e)}",
+            level=40
+        )
+
+
+def aggressive_cleanup():
+    """Perform aggressive memory cleanup."""
+    try:
+        # Force Python garbage collection
+        import gc
+        gc.collect()
+        
+        # Cleanup rate limiter aggressively
+        distributed_limiter.cleanup()
+        
+        log_security_event(
+            "AGGRESSIVE_CLEANUP",
+            "system",
+            "Aggressive cleanup completed",
+            level=20
+        )
+    except Exception as e:
+        log_security_event(
+            "AGGRESSIVE_CLEANUP_ERROR",
+            "system",
+            f"Error during aggressive cleanup: {str(e)}",
+            level=40
+        )
+
+
+# ---------------------------------------------------------------------------
+# Configuration and Logging
+# ---------------------------------------------------------------------------
 
 EVENTS_LOG = LAZARUS_DIR / "events.log"
 DELIVERY_LOG = LAZARUS_DIR / "delivery.log"
@@ -399,6 +568,172 @@ async def remove_document(request: Request, filename: str):
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ---------------------------------------------------------------------------
+# Session Key Management Endpoints
+# ---------------------------------------------------------------------------
+
+class SessionKeyRequest(BaseModel):
+    """Request model for session key generation"""
+    session_id: str = Field(..., description="Unique session identifier")
+    user_agent: str = Field(default="", description="User agent string")
+    device_fingerprint: Optional[str] = Field(None, description="Optional device fingerprint")
+
+
+class SessionKeyResponse(BaseModel):
+    """Response model for session key"""
+    key_id: str = Field(..., description="Unique key identifier")
+    key: str = Field(..., description="Encryption key (hex encoded)")
+    expires_at: str = Field(..., description="Key expiration timestamp (ISO 8601)")
+
+
+class KeyRotationRequest(BaseModel):
+    """Request model for key rotation"""
+    key_id: str = Field(..., description="Key ID to rotate")
+
+
+class KeyRotationResponse(BaseModel):
+    """Response model for key rotation"""
+    key_id: str = Field(..., description="New key identifier")
+    key: str = Field(..., description="New encryption key (hex encoded)")
+    expires_at: str = Field(..., description="New key expiration timestamp (ISO 8601)")
+
+
+@app.post("/api/session/key", response_model=SessionKeyResponse)
+async def create_session_key(
+    request: Request,
+    key_request: SessionKeyRequest
+) -> SessionKeyResponse:
+    """
+    Create a new session-specific encryption key.
+    
+    This endpoint provides server-generated encryption keys with PBKDF2 derivation,
+    addressing the LocalStorage encryption key vulnerability (CVSS 8.9).
+    
+    Args:
+        request: FastAPI request object
+        key_request: Session key request with session_id and user_agent
+
+    Returns:
+        SessionKeyResponse with key_id, key, and expires_at
+    """
+    # Verify API key
+    credentials = await security(request)
+    verify_api_key(credentials)
+    
+    # Get client information
+    user_agent = key_request.user_agent or request.headers.get("user-agent", "")
+    ip_address = request.client.host if request.client else "unknown"
+    
+    # Generate session key
+    session_key = key_manager.generate_session_key(
+        session_id=key_request.session_id,
+        user_agent=user_agent,
+        ip_address=ip_address,
+        device_fingerprint=key_request.device_fingerprint
+    )
+    
+    # Log security event
+    log_security_event(
+        "SESSION_KEY_CREATED",
+        ip_address,
+        f"Session ID: {key_request.session_id}, Key ID: {session_key.key_id}"
+    )
+    
+    return SessionKeyResponse(
+        key_id=session_key.key_id,
+        key=session_key.key,
+        expires_at=session_key.expires_at.isoformat()
+    )
+
+
+@app.post("/api/session/key/rotate", response_model=KeyRotationResponse)
+async def rotate_session_key(
+    request: Request,
+    rotation_request: KeyRotationRequest
+) -> KeyRotationResponse:
+    """
+    Rotate an existing session key for enhanced security.
+    
+    This endpoint implements key rotation to limit the impact of potential key compromises.
+    
+    Args:
+        request: FastAPI request object
+        rotation_request: Key rotation request with key_id
+
+    Returns:
+        KeyRotationResponse with new key_id, key, and expires_at
+    """
+    # Verify API key
+    credentials = await security(request)
+    verify_api_key(credentials)
+    
+    # Get client information
+    ip_address = request.client.host if request.client else "unknown"
+    
+    # Rotate key
+    new_session_key = key_manager.rotate_key(rotation_request.key_id)
+    
+    if not new_session_key:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Key not found or already expired"
+        )
+    
+    # Log security event
+    log_security_event(
+        "SESSION_KEY_ROTATED",
+        ip_address,
+        f"Old Key ID: {rotation_request.key_id}, New Key ID: {new_session_key.key_id}"
+    )
+    
+    return KeyRotationResponse(
+        key_id=new_session_key.key_id,
+        key=new_session_key.key,
+        expires_at=new_session_key.expires_at.isoformat()
+    )
+
+
+@app.get("/api/session/key/validate/{key_id}")
+async def validate_session_key(
+    request: Request,
+    key_id: str
+) -> dict:
+    """
+    Validate a session key and check device binding.
+    
+    This endpoint validates session keys and ensures device binding is maintained.
+    
+    Args:
+        request: FastAPI request object
+        key_id: Key ID to validate
+
+    Returns:
+        Dictionary with validation status and key metadata
+    """
+    # Get client information
+    user_agent = request.headers.get("user-agent", "")
+    ip_address = request.client.host if request.client else "unknown"
+    
+    # Validate session key
+    session_key = key_manager.validate_session_key(key_id, user_agent, ip_address)
+    
+    if not session_key:
+        return {
+            "valid": False,
+            "reason": "Key not found, expired, or device binding mismatch"
+        }
+    
+    return {
+        "valid": True,
+        "key_id": session_key.key_id,
+        "expires_at": session_key.expires_at.isoformat(),
+        "device_binding": {
+            "user_agent_match": session_key.user_agent == user_agent,
+            "ip_address": session_key.ip_address
+        }
+    }
 
 
 @app.get("/{full_path:path}")
