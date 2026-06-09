@@ -31,9 +31,9 @@ except ImportError:
 @dataclass
 class RateLimitConfig:
     """Configuration for rate limiting"""
-    requests: int = 10
+    requests: int = 60
     window: int = 60  # seconds
-    burst: int = 20
+    burst: int = 100
     backoff_base: int = 2
     backoff_max: int = 60
     ip_reputation_threshold: int = 50

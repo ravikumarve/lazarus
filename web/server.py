@@ -139,22 +139,23 @@ async def security_middleware(request: Request, call_next):
     path = request.url.path
     is_static = any(path.endswith(ext) for ext in _STATIC_EXTENSIONS)
     
+    rate_result = None
     if not is_static:
         try:
             ip_address = request.client.host if request.client else "unknown"
-            result = distributed_limiter.is_allowed(ip_address)
+            rate_result = distributed_limiter.is_allowed(ip_address)
             
-            if not result.allowed:
+            if not rate_result.allowed:
                 log_security_event(
                     "RATE_LIMIT",
                     ip_address,
-                    f"Path: {path}, Reason: {result.reason}",
+                    f"Path: {path}, Reason: {rate_result.reason}",
                     level=30
                 )
                 return JSONResponse(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    content={"detail": f"Rate limit exceeded. {result.reason}"},
-                    headers={"Retry-After": str(result.retry_after)}
+                    content={"detail": f"Rate limit exceeded. {rate_result.reason}"},
+                    headers={"Retry-After": str(rate_result.retry_after)}
                 )
         except Exception as e:
             # Log error but allow request if rate limiting fails
@@ -172,15 +173,13 @@ async def security_middleware(request: Request, call_next):
     for key, value in get_security_headers().items():
         response.headers[key] = value
     
-    # Add rate limit headers (skip for static files)
-    if not is_static:
-        ip_address = request.client.host if request.client else "unknown"
-        result = distributed_limiter.is_allowed(ip_address, check_ip_reputation=False)
-        if result.remaining is not None:
-            response.headers["X-RateLimit-Limit"] = str(result.limit)
-            response.headers["X-RateLimit-Remaining"] = str(result.remaining)
-            if result.reset_at:
-                response.headers["X-RateLimit-Reset"] = str(int(result.reset_at.timestamp()))
+    # Add rate limit headers (skip for static files — reuse rate_result from first call)
+    if not is_static and rate_result is not None:
+        if rate_result.remaining is not None:
+            response.headers["X-RateLimit-Limit"] = str(rate_result.limit)
+            response.headers["X-RateLimit-Remaining"] = str(rate_result.remaining)
+            if rate_result.reset_at:
+                response.headers["X-RateLimit-Reset"] = str(int(rate_result.reset_at.timestamp()))
     
     return response
 
