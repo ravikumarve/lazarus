@@ -10,6 +10,7 @@ import os
 import sys
 from pathlib import Path
 from datetime import datetime, UTC
+from contextlib import asynccontextmanager
 
 # Load .env file if present (before any other imports that need it)
 _env_path = Path(__file__).parent.parent / '.env'
@@ -51,7 +52,77 @@ from core.security import (
 )
 from core.rate_limiter import get_distributed_rate_limiter, RateLimitConfig
 
-app = FastAPI(title="Lazarus Protocol Dashboard")
+import asyncio
+import threading
+import psutil
+
+# ---------------------------------------------------------------------------
+# Lifespan (startup / shutdown)
+# ---------------------------------------------------------------------------
+
+_cleanup_interval = 300  # 5 minutes
+_memory_threshold = 1024 * 1024 * 1024  # 1GB
+_stop_event = threading.Event()
+
+
+async def periodic_cleanup():
+    """Periodic cleanup task for rate limiter and memory monitoring."""
+    while not _stop_event.is_set():
+        try:
+            # Cleanup rate limiter
+            distributed_limiter.cleanup()
+
+            # Check memory usage
+            check_memory_usage()
+
+            # Wait for next interval
+            await asyncio.sleep(_cleanup_interval)
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            log_security_event(
+                "CLEANUP_ERROR",
+                "system",
+                f"Error during periodic cleanup: {str(e)}",
+                level=40
+            )
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Startup and shutdown lifecycle handler."""
+    # ── Startup ─────────────────────────────────────────────────
+    cleanup_task = asyncio.create_task(periodic_cleanup())
+
+    log_security_event(
+        "SERVER_STARTUP",
+        "system",
+        "Lazarus Protocol server started",
+        level=20
+    )
+
+    yield  # ── App runs here ────────────────────────────────────
+
+    # ── Shutdown ─────────────────────────────────────────────────
+    _stop_event.set()
+    cleanup_task.cancel()
+    try:
+        await cleanup_task
+    except asyncio.CancelledError:
+        pass
+
+    distributed_limiter.cleanup()
+    key_manager.stop()
+
+    log_security_event(
+        "SERVER_SHUTDOWN",
+        "system",
+        "Lazarus Protocol server stopped",
+        level=20
+    )
+
+
+app = FastAPI(title="Lazarus Protocol Dashboard", lifespan=lifespan)
 
 # Initialize distributed rate limiter
 distributed_limiter = get_distributed_rate_limiter()
@@ -123,87 +194,8 @@ app.add_middleware(
 )
 
 # ---------------------------------------------------------------------------
-# Startup and Shutdown Events
+# Startup / Shutdown — handled by lifespan() above
 # ---------------------------------------------------------------------------
-
-import asyncio
-import threading
-import psutil
-import os
-
-_cleanup_interval = 300  # 5 minutes
-_memory_threshold = 1024 * 1024 * 1024  # 1GB
-_cleanup_task = None
-_stop_event = threading.Event()
-
-
-@app.on_event("startup")
-async def startup_event():
-    """Initialize cleanup and monitoring tasks on startup."""
-    global _cleanup_task
-    
-    # Start periodic cleanup task
-    _cleanup_task = asyncio.create_task(periodic_cleanup())
-    
-    # Log startup
-    log_security_event(
-        "SERVER_STARTUP",
-        "system",
-        "Lazarus Protocol server started",
-        level=20
-    )
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Cleanup on shutdown."""
-    global _cleanup_task, _stop_event
-    
-    # Stop cleanup task
-    _stop_event.set()
-    if _cleanup_task:
-        _cleanup_task.cancel()
-        try:
-            await _cleanup_task
-        except asyncio.CancelledError:
-            pass
-    
-    # Cleanup rate limiter
-    distributed_limiter.cleanup()
-    
-    # Stop key manager
-    key_manager.stop()
-    
-    # Log shutdown
-    log_security_event(
-        "SERVER_SHUTDOWN",
-        "system",
-        "Lazarus Protocol server stopped",
-        level=20
-    )
-
-
-async def periodic_cleanup():
-    """Periodic cleanup task for rate limiter and memory monitoring."""
-    while not _stop_event.is_set():
-        try:
-            # Cleanup rate limiter
-            distributed_limiter.cleanup()
-            
-            # Check memory usage
-            check_memory_usage()
-            
-            # Wait for next interval
-            await asyncio.sleep(_cleanup_interval)
-        except asyncio.CancelledError:
-            break
-        except Exception as e:
-            log_security_event(
-                "CLEANUP_ERROR",
-                "system",
-                f"Error during periodic cleanup: {str(e)}",
-                level=40
-            )
 
 
 def check_memory_usage():
