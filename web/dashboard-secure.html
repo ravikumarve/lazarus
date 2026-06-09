@@ -1,4 +1,207 @@
--type" id="document-type-label">Document Type:</label>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/lazarus-logo.svg" />
+    <title>Lazarus Protocol - Secure Dashboard</title>
+    <link rel="stylesheet" href="/css/dashboard.css">
+    <script src="https://unpkg.com/lucide@latest" defer></script>
+    <style>
+        /* Responsive support */
+        @media (max-width: 768px) {
+            .app-container { padding: 10px; }
+            .container { padding: 10px; }
+            .grid { grid-template-columns: 1fr; gap: 16px; }
+            .actions-grid { grid-template-columns: 1fr; gap: 12px; }
+            .header h1 { font-size: 2.2rem; }
+            .header p { font-size: 1.1rem; }
+            .btn { min-width: 120px; padding: 12px 20px; }
+            .card { padding: 20px; border-radius: 12px; }
+            .status-item { padding: 10px 12px; margin-bottom: 8px; }
+        }
+        @media (max-width: 480px) {
+            .header h1 { font-size: 1.8rem; }
+            .header p { font-size: 1rem; }
+            .btn { width: 100%; min-width: auto; }
+            .header-actions { flex-direction: column; width: 100%; }
+        }
+    </style>
+</head>
+<body>
+    <div class="theme-toggle" onclick="toggleTheme()" title="Toggle theme">🌓</div>
+    <div class="app-container">
+        <div class="header">
+            <h1>⚰️ Lazarus Protocol Dashboard</h1>
+            <p>Monitor and manage your digital legacy protocol</p>
+            <div class="header-actions">
+                <button class="btn btn-sm btn-secondary" onclick="loadStatus()" title="Refresh status">🔄 Refresh</button>
+                <button class="btn btn-sm btn-secondary" onclick="showApiDocsModal()" title="View API documentation">📚 API Docs</button>
+                <button class="btn btn-sm btn-secondary" onclick="window.location.href='/pricing'" title="View pricing plans">💰 Pricing</button>
+                <button class="btn btn-sm btn-secondary" onclick="logout()" title="Logout">🚪 Logout</button>
+            </div>
+        </div>
+
+        <div id="loading" class="loading">
+            <div class="loading-spinner"></div>
+            <p>Loading Lazarus Protocol status...</p>
+        </div>
+
+        <div id="error" class="error" style="display: none;">
+            <h3>🚨 Connection Error</h3>
+            <p id="error-message">Failed to connect to Lazarus server. Please ensure the server is running on port 5555.</p>
+            <button class="btn btn-sm btn-secondary" onclick="loadStatus()">🔄 Retry Connection</button>
+        </div>
+
+        <div id="dashboard" style="display: none;">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-number" id="health-indicator">
+                        <span class="health-indicator health-good"></span>
+                        <span id="health-status">Healthy</span>
+                    </div>
+                    <div class="stat-label">System Health</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="uptime-stat">0d 0h</div>
+                    <div class="stat-label">Uptime</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="events-count">0</div>
+                    <div class="stat-label">Total Events</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="deliveries-count">0</div>
+                    <div class="stat-label">Deliveries</div>
+                </div>
+            </div>
+
+            <div class="grid">
+                <div class="card">
+                    <h2>📊 Status Overview</h2>
+                    <div id="status-items">
+                        <div class="status-item">
+                            <span class="status-label">Protocol State:</span>
+                            <span id="armed-state" class="status-value status-badge">Loading...</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">Days Remaining:</span>
+                            <span id="days-remaining" class="status-value">Loading...</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">Last Check-in:</span>
+                            <span id="last-ping" class="status-value">Loading...</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">Agent Status:</span>
+                            <span id="agent-status" class="status-value status-badge">Loading...</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">Owner:</span>
+                            <span id="owner-name" class="status-value">Loading...</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">Beneficiaries:</span>
+                            <span id="beneficiary-count" class="status-value">Loading...</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">Check-in Interval:</span>
+                            <span id="checkin-interval" class="status-value">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>⚡ Quick Actions</h2>
+                    <div class="actions-grid">
+                        <div class="action-card">
+                            <span class="action-icon">📍</span>
+                            <button id="ping-btn" class="btn btn-primary" onclick="handlePing()">Ping Check-in</button>
+                            <p class="status-label">Record your presence</p>
+                        </div>
+                        <div class="action-card">
+                            <span class="action-icon">❄️</span>
+                            <button id="freeze-btn" class="btn btn-secondary" onclick="showFreezeModal()">Extend Deadline</button>
+                            <p class="status-label">Add more time</p>
+                        </div>
+                        <div class="action-card">
+                            <span class="action-icon">🔄</span>
+                            <button id="refresh-btn" class="btn btn-secondary" onclick="loadStatus()">Refresh Status</button>
+                            <p class="status-label">Update information</p>
+                        </div>
+                    </div>
+                    <div id="action-feedback" style="margin-top: 20px;"></div>
+                </div>
+
+                <div class="card">
+                    <h2>📦 Document Bundle</h2>
+                    <div id="bundle-info">
+                        <div class="loading">Loading bundle information...</div>
+                    </div>
+                    <div class="actions-grid" style="margin-top: 20px;">
+                        <button class="btn btn-secondary btn-sm" onclick="showAddDocumentModal()">➕ Add Document</button>
+                        <button class="btn btn-secondary btn-sm" onclick="refreshBundle()">🔄 Refresh Bundle</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>📋 Recent Activity</h2>
+                <div class="actions-grid" style="margin-bottom: 20px;">
+                    <button class="btn btn-secondary btn-sm" onclick="loadEvents(20)">Last 20 Events</button>
+                    <button class="btn btn-secondary btn-sm" onclick="loadEvents(50)">Last 50 Events</button>
+                    <button class="btn btn-secondary btn-sm" onclick="clearEventsCache()">🗑️ Clear Cache</button>
+                </div>
+                <div id="events-list" class="events-list">
+                    <div class="loading">Loading events...</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>🖥️ System Info</h2>
+                <div class="status-item">
+                    <span class="status-label">Server Version:</span>
+                    <span id="server-version" class="status-value">v1.0.0</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">API Status:</span>
+                    <span id="api-status" class="status-value status-badge status-running">Online</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">Last Updated:</span>
+                    <span id="last-updated" class="status-value">Just now</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Freeze Modal -->
+    <div id="freeze-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <h3>❄️ Extend Deadline</h3>
+            <p class="status-label">Add more days before the protocol triggers</p>
+            <div class="form-group">
+                <label for="freeze-days">Number of days to extend:</label>
+                <input type="number" id="freeze-days" value="30" min="1" max="365" placeholder="Enter days (1-365)">
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-primary" onclick="handleFreeze()">✅ Confirm</button>
+                <button class="btn btn-secondary" onclick="hideFreezeModal()">❌ Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Document Modal -->
+    <div id="add-document-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <h3>📄 Add Document to Bundle</h3>
+            <p class="status-label">Add files to be delivered to your beneficiaries</p>
+            <div class="form-group">
+                <label for="document-path">File Path:</label>
+                <input type="text" id="document-path" placeholder="/path/to/your/document.txt">
+            </div>
+            <div class="form-group">
+                <label for="document-type" id="document-type-label">Document Type:</label>
                 <select id="document-type" aria-labelledby="document-type-label">
                     <option value="WALLET">Wallet Information</option>
                     <option value="PASSWORD">Password File</option>
@@ -618,5 +821,6 @@
             }
         });
     </script>
+<script>document.addEventListener('DOMContentLoaded', () => { lucide.createIcons(); });</script>
 </body>
 </html>

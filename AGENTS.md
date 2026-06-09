@@ -1,5 +1,52 @@
 # Lazarus Protocol - Agent Coordination
 
+### [2026-06-09 18:00] - Sprint 7B Hotfix — Dashboard 401 Auth Fix
+- **State**: Success
+- **MCP Data Used**: grep (code analysis), read (file analysis), envsitter (.env key management)
+- **Agents Deployed**: Orchestrator (direct execution)
+- **Problem**: `/status` endpoint returned 401 because `dashboard.html` used plain `fetch()` with no `Authorization` header, and `LAZARUS_API_KEY` env var was not set
+- **Fixes Applied**:
+  - Added API key management to `dashboard.html`: `fetchWithAuth()` wrapper reads key from `localStorage`, sends `Authorization: Bearer <key>` header
+  - If 401 is received, the dashboard shows an API key input modal prompting the user to enter their key
+  - Added 🔑 API Key button in the header to set/change the key at any time
+  - The modal pre-fills from localStorage and validates minimum 16-char length
+  - Added `load_dotenv()` to `web/server.py` so it auto-loads `.env` file on startup
+  - Generated and added a secure `LAZARUS_API_KEY` to `.env`
+- **Files Modified**:
+  - `web/dashboard.html` (+89 lines): `fetchWithAuth()` wrapper, API key modal, API Key button, key storage helpers
+  - `web/server.py` (+7 lines): `load_dotenv()` from `.env` at project root
+  - `.env`: Added `LAZARUS_API_KEY` with generated 43-char token
+- **Verification**: `/status` returns 200 with `Authorization: Bearer <key>` ✓, server auto-loads key from `.env` ✓, dashboard page loads at 200 ✓
+- **Next Turn Directive**: Sprint 8 — v1.1 features, or fix FastAPI `on_event` deprecation
+
+### [2026-06-09 17:00] - Sprint 7B — UI Polish & Ship Readiness Complete
+- **State**: Success - All 4 phases completed, verified live
+- **MCP Data Used**: ux-responsive (responsive CSS patterns), code_tree (project structure), direct file reads (for CSS extraction)
+- **Agents Deployed**: @orchestrator (direct execution for all phases)
+- **Verification**: OG tags: 5 ✓ | No $29 remaining ✓ | CSS files: 3 (1,455 lines total) ✓ | Lucide on all 5 pages ✓ | Server routes all 200 ✓ | Test pass rate: 251/281 unchanged ✓
+- **Phase 1 (🔴 URGENT) — Pre-Ship Blockers**:
+  - 1.1 Fixed pricing mismatch: `$29` → `$49` on pricing.html (Pro tier + comparison table)
+  - 1.2 Added OG/Twitter meta tags (title, description, image, url, type, twitter:card, twitter:title, twitter:description) to index.html head
+  - 1.3 Added `<link rel="icon" type="image/svg+xml" href="/lazarus-logo.svg">` to index.html
+  - 1.4 Created robots.txt and sitemap.xml at project root
+- **Phase 2 (🟡 DESIGN) — Quality Bar**:
+  - 2.1 Extracted 738 lines of inline CSS from dashboard.html → `web/css/dashboard.css`
+  - 2.2 Extracted 418 lines of inline CSS from pricing.html → `web/css/pricing.css`
+  - 2.3 Extracted 284 lines of inline CSS from login.html → `web/css/login.css`
+  - 2.4 Added Lucide icon CDN + init script to all 5 HTML pages
+  - 2.5 Replaced ⚰️ emoji favicons with real SVG logo (`/lazarus-logo.svg`) on all pages
+- **Phase 3 (🟡 RESPONSIVE & THEME)**:
+  - 3.1 Added full responsive CSS (768px + 480px breakpoints) to dashboard-secure.html + built its missing head/sections
+  - 3.2 Added `[data-theme="light"]` CSS to login.css + theme toggle button + JS to login.html
+- **Phase 4 (🟢 SEO)**:
+  - 4.1 robots.txt created (Allow all, sitemap pointing to GitHub Pages)
+  - 4.2 sitemap.xml created (single URL entry for GitHub Pages)
+- **Infrastructure fixes**:
+  - Added `/lazarus-logo.svg` + `/css/{name}.css` routes to server.py (FastAPI static serving)
+  - dashboard-secure.html rebuilt from fragment: added DOCTYPE, head, body, header, stats grid, status, actions, bundle all sections
+- **HTML summary**: index.html (526 lines) | pricing.html (230 lines) | dashboard.html (782 lines) | dashboard-secure.html (1089 lines) | login.html (218 lines)
+- **Next Turn Directive**: Sprint 8 — v1.1 features: push test pass rate to 90%+, real blockchain E2E tests, Gumroad production deployment
+
 ## Overview
 
 This document tracks agent coordination patterns and successful orchestration approaches for Lazarus Protocol.

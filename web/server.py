@@ -11,6 +11,15 @@ import sys
 from pathlib import Path
 from datetime import datetime, UTC
 
+# Load .env file if present (before any other imports that need it)
+_env_path = Path(__file__).parent.parent / '.env'
+if _env_path.exists():
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(_env_path)
+    except ImportError:
+        pass  # dotenv not installed, env must be set manually
+
 from fastapi import FastAPI, HTTPException, Request, Response, status
 from fastapi.responses import HTMLResponse, FileResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -48,36 +57,44 @@ app = FastAPI(title="Lazarus Protocol Dashboard")
 distributed_limiter = get_distributed_rate_limiter()
 
 # Add security middleware
+# Static file extensions that bypass rate limiting
+_STATIC_EXTENSIONS = {".css", ".svg", ".ico", ".js", ".png", ".jpg", ".jpeg", ".gif", ".webp"}
+
+
 @app.middleware("http")
 async def security_middleware(request: Request, call_next):
     """Apply security headers and distributed rate limiting to all requests."""
-    # Check distributed rate limit
-    try:
-        ip_address = request.client.host if request.client else "unknown"
-        result = distributed_limiter.is_allowed(ip_address)
-        
-        if not result.allowed:
+    # Check distributed rate limit (skip for static files)
+    path = request.url.path
+    is_static = any(path.endswith(ext) for ext in _STATIC_EXTENSIONS)
+    
+    if not is_static:
+        try:
+            ip_address = request.client.host if request.client else "unknown"
+            result = distributed_limiter.is_allowed(ip_address)
+            
+            if not result.allowed:
+                log_security_event(
+                    "RATE_LIMIT",
+                    ip_address,
+                    f"Path: {path}, Reason: {result.reason}",
+                    level=30
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail=f"Rate limit exceeded. {result.reason}",
+                    headers={"Retry-After": str(result.retry_after)}
+                )
+        except HTTPException:
+            raise
+        except Exception as e:
+            # Log error but allow request if rate limiting fails
             log_security_event(
-                "RATE_LIMIT",
-                ip_address,
-                f"Path: {request.url.path}, Reason: {result.reason}",
-                level=30
+                "RATE_LIMIT_ERROR",
+                request.client.host if request.client else "unknown",
+                f"Error: {str(e)}",
+                level=40
             )
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail=f"Rate limit exceeded. {result.reason}",
-                headers={"Retry-After": str(result.retry_after)}
-            )
-    except HTTPException:
-        raise
-    except Exception as e:
-        # Log error but allow request if rate limiting fails
-        log_security_event(
-            "RATE_LIMIT_ERROR",
-            request.client.host if request.client else "unknown",
-            f"Error: {str(e)}",
-            level=40
-        )
     
     # Process request
     response = await call_next(request)
@@ -86,14 +103,15 @@ async def security_middleware(request: Request, call_next):
     for key, value in get_security_headers().items():
         response.headers[key] = value
     
-    # Add rate limit headers
-    ip_address = request.client.host if request.client else "unknown"
-    result = distributed_limiter.is_allowed(ip_address, check_ip_reputation=False)
-    if result.remaining is not None:
-        response.headers["X-RateLimit-Limit"] = str(result.limit)
-        response.headers["X-RateLimit-Remaining"] = str(result.remaining)
-        if result.reset_at:
-            response.headers["X-RateLimit-Reset"] = str(int(result.reset_at.timestamp()))
+    # Add rate limit headers (skip for static files)
+    if not is_static:
+        ip_address = request.client.host if request.client else "unknown"
+        result = distributed_limiter.is_allowed(ip_address, check_ip_reputation=False)
+        if result.remaining is not None:
+            response.headers["X-RateLimit-Limit"] = str(result.limit)
+            response.headers["X-RateLimit-Remaining"] = str(result.remaining)
+            if result.reset_at:
+                response.headers["X-RateLimit-Reset"] = str(int(result.reset_at.timestamp()))
     
     return response
 
@@ -337,11 +355,39 @@ def root():
     return FileResponse(html_path, media_type="text/html")
 
 
+@app.get("/lazarus-logo.svg")
+def logo():
+    """Serve the Lazarus Protocol SVG logo."""
+    svg_path = Path(__file__).parent.parent / "lazarus-logo.svg"
+    if svg_path.exists():
+        return FileResponse(svg_path, media_type="image/svg+xml")
+    raise HTTPException(status_code=404, detail="Logo not found")
+
+
 @app.get("/pricing")
 def pricing():
     """Serve the pricing HTML page."""
     html_path = Path(__file__).parent / "pricing.html"
     return FileResponse(html_path, media_type="text/html")
+
+
+# Static CSS files
+CSS_FILES = {
+    "dashboard.css": "dashboard.css",
+    "pricing.css": "pricing.css",
+    "login.css": "login.css",
+}
+
+
+@app.get("/css/{css_name}")
+def serve_css(css_name: str):
+    """Serve CSS files from web/css directory."""
+    if css_name not in CSS_FILES:
+        raise HTTPException(status_code=404, detail=f"CSS not found: {css_name}")
+    css_path = Path(__file__).parent / "css" / CSS_FILES[css_name]
+    if css_path.exists():
+        return FileResponse(css_path, media_type="text/css")
+    raise HTTPException(status_code=404, detail=f"CSS not found: {css_name}")
 
 
 @app.get("/status")
