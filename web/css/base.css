@@ -715,6 +715,34 @@ h1, h2, h3, h4, h5, h6 {
     }
 }
 
+/* ── Header Logo ─────────────────────────────────────────── */
+.header-logo {
+    height: 48px;
+    width: auto;
+    vertical-align: middle;
+    margin-right: 12px;
+    filter: drop-shadow(0 0 12px rgba(139, 0, 0, 0.3));
+    transition: var(--transition);
+}
+
+.header-logo:hover {
+    filter: drop-shadow(0 0 20px rgba(139, 0, 0, 0.5));
+    transform: scale(1.05);
+}
+
+@media (max-width: 768px) {
+    .header-logo {
+        height: 36px;
+    }
+}
+
+@media (max-width: 480px) {
+    .header-logo {
+        height: 28px;
+        margin-right: 8px;
+    }
+}
+
 /* ── Reduced Motion ──────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
     *,
