@@ -560,17 +560,12 @@ def encrypt_data(data: Union[str, bytes], key: bytes) -> bytes:
     # Generate nonce
     nonce = os.urandom(12)
     
-    # Encrypt
-    cipher = Cipher(
-        algorithms.AES(key),
-        modes.GCM(nonce),
-        backend=default_backend()
-    )
-    encryptor = cipher.encryptor()
-    ciphertext = encryptor.update(data_bytes) + encryptor.finalize()
+    # Encrypt using AES-GCM
+    aesgcm = AESGCM(key)
+    ciphertext = aesgcm.encrypt(nonce, data_bytes, associated_data=None)
     
-    # Return nonce + ciphertext + tag
-    return nonce + ciphertext + encryptor.tag
+    # Return nonce + ciphertext (which includes the GCM tag)
+    return nonce + ciphertext
 
 
 def decrypt_data(encrypted_data: bytes, key: bytes) -> bytes:
@@ -578,7 +573,7 @@ def decrypt_data(encrypted_data: bytes, key: bytes) -> bytes:
     Decrypt data encrypted with encrypt_data.
     
     Args:
-        encrypted_data: Encrypted data (nonce + ciphertext + tag)
+        encrypted_data: Encrypted data (nonce + ciphertext including tag)
         key: 256-bit (32-byte) decryption key
         
     Returns:
@@ -593,19 +588,12 @@ def decrypt_data(encrypted_data: bytes, key: bytes) -> bytes:
     if len(encrypted_data) < 28:  # 12 bytes nonce + 16 bytes tag + at least 1 byte ciphertext
         raise ValueError("Encrypted data too short")
     
-    # Extract nonce, ciphertext, and tag
+    # Extract nonce and ciphertext (includes GCM tag at the end)
     nonce = encrypted_data[:12]
-    tag = encrypted_data[-16:]
-    ciphertext = encrypted_data[12:-16]
+    ciphertext = encrypted_data[12:]
     
-    # Decrypt
-    cipher = Cipher(
-        algorithms.AES(key),
-        modes.GCM(nonce, tag),
-        backend=default_backend()
-    )
-    decryptor = cipher.decryptor()
-    plaintext = decryptor.update(ciphertext) + decryptor.finalize()
+    # Decrypt using AES-GCM
+    aesgcm = AESGCM(key)
+    plaintext = aesgcm.decrypt(nonce, ciphertext, associated_data=None)
     
     return plaintext
-    return pem

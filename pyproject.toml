@@ -68,6 +68,7 @@ Issues = "https://github.com/ravikumarve/lazarus/issues"
 
 [project.scripts]
 lazarus = "cli.main:cli"
+lazarus-activate = "gumroad.install_hook:main"
 
 [tool.setuptools]
 package-data = {"*" = ["*.md", "*.txt", "*.yaml", "*.yml", "*.json"]}

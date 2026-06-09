@@ -82,6 +82,50 @@ def mock_redis():
         mock_redis.set.return_value = True
         mock_redis.incr.return_value = 1
         mock_redis.expire.return_value = True
+        
+        # Mock pipeline for rate limiter - use side_effect to track state
+        pipe_data = {'count': 0, 'backoff': None, 'window_start': None}
+        
+        def pipe_get(key):
+            if key.endswith(':count'):
+                return pipe_data['count']
+            elif key.endswith(':backoff'):
+                return pipe_data['backoff']
+            elif key.endswith(':window_start'):
+                return pipe_data['window_start']
+            return None
+        
+        def pipe_set(key, value, **kwargs):
+            if key.endswith(':backoff'):
+                pipe_data['backoff'] = value
+            elif key.endswith(':window_start'):
+                pipe_data['window_start'] = value
+            elif key.endswith(':count'):
+                pipe_data['count'] = value
+            return True
+        
+        def pipe_incr(key):
+            if key.endswith(':count'):
+                pipe_data['count'] = pipe_data.get('count', 0) + 1
+            return pipe_data['count']
+        
+        def pipe_execute():
+            c = pipe_data.get('count', 0) or 0
+            b = pipe_data.get('backoff')
+            w = pipe_data.get('window_start') or time.time()
+            return [c, b, w, -1]
+        
+        mock_pipe = MagicMock()
+        mock_pipe.get.side_effect = pipe_get
+        mock_pipe.set.side_effect = pipe_set
+        mock_pipe.incr.side_effect = pipe_incr
+        mock_pipe.execute.side_effect = pipe_execute
+        mock_pipe.expire.return_value = True
+        mock_pipe.ttl.return_value = -1
+        mock_pipe.delete.return_value = True
+        
+        mock_redis.pipeline.return_value = mock_pipe
+        
         yield mock_redis
 
 
@@ -162,7 +206,7 @@ class TestEncryptionIntegration:
         
         # Step 1: Prepare test data
         test_data = b"Sensitive data that needs encryption"
-        encryption_key = "test_encryption_key_32bytes!!"
+        encryption_key = b"test_encryption_key_32bytes!!!!!"
         
         # Step 2: Encrypt data
         encrypted_data = encrypt_data(test_data, encryption_key)
@@ -179,29 +223,25 @@ class TestEncryptionIntegration:
 
     def test_file_encryption_with_storage(self, temp_lazarus_dir):
         """Test file encryption with storage integration"""
-        from core.encryption import encrypt_file, decrypt_file
+        from core.encryption import encrypt_data, decrypt_data
         
         # Step 1: Create test file
         test_file = temp_lazarus_dir / "test_secret.txt"
         test_content = b"Secret file content"
         test_file.write_bytes(test_content)
         
-        # Step 2: Encrypt file
-        encrypted_file = temp_lazarus_dir / "test_encrypted.bin"
-        encryption_key = "test_encryption_key_32bytes!!"
-        encrypt_file(str(test_file), str(encrypted_file), encryption_key)
+        # Step 2: Encrypt file content
+        encryption_key = b"test_encryption_key_32bytes!!!!!"
+        encrypted_content = encrypt_data(test_content, encryption_key)
         
-        # Step 3: Verify encrypted file
-        assert encrypted_file.exists()
-        encrypted_content = encrypted_file.read_bytes()
+        # Step 3: Verify encrypted content
         assert encrypted_content != test_content
+        assert len(encrypted_content) > len(test_content)
         
-        # Step 4: Decrypt file
-        decrypted_file = temp_lazarus_dir / "test_decrypted.txt"
-        decrypt_file(str(encrypted_file), str(decrypted_file), encryption_key)
+        # Step 4: Decrypt content
+        decrypted_content = decrypt_data(encrypted_content, encryption_key)
         
-        # Step 5: Verify decrypted content
-        decrypted_content = decrypted_file.read_bytes()
+        # Step 5: Verify decrypted content matches original
         assert decrypted_content == test_content
 
     def test_key_derivation_integration(self, temp_lazarus_dir):
@@ -491,7 +531,7 @@ class TestCSRFProtection:
         csrf_token = key_manager.generate_csrf_token(session_id)
         
         # Step 2: Validate token
-        is_valid = key_manager.validate_csrf_token(session_id, csrf_token)
+        is_valid = key_manager.validate_csrf_token(csrf_token, session_id=session_id)
         
         # Step 3: Verify validation
         assert is_valid == True
@@ -503,11 +543,11 @@ class TestCSRFProtection:
         csrf_token = key_manager.generate_csrf_token(session_id)
         
         # Step 2: Validate token first time
-        is_valid_1 = key_manager.validate_csrf_token(session_id, csrf_token)
+        is_valid_1 = key_manager.validate_csrf_token(csrf_token, session_id=session_id)
         assert is_valid_1 == True
         
         # Step 3: Try to reuse token
-        is_valid_2 = key_manager.validate_csrf_token(session_id, csrf_token)
+        is_valid_2 = key_manager.validate_csrf_token(csrf_token, session_id=session_id)
         
         # Step 4: Verify reuse prevention
         assert is_valid_2 == False

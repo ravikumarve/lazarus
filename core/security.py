@@ -28,7 +28,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, UTC
 from functools import wraps
 from pathlib import Path
-from typing import Callable, Optional, Dict
+from typing import Any, Callable, Optional, Dict, Union
 
 from fastapi import HTTPException, Request, Response, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -98,6 +98,7 @@ class KeyManager:
         self.salt = self._get_or_generate_salt()
         self.iterations = PBKDF2_ITERATIONS
         self._session_keys: Dict[str, SessionKey] = {}
+        self._used_csrf_tokens: set = set()  # Track used CSRF tokens for reuse prevention
         self._lock = threading.RLock()
         self._cleanup_thread = None
         self._stop_event = threading.Event()
@@ -118,22 +119,25 @@ class KeyManager:
         logging.info(f"Generated new encryption salt. Set {ENCRYPTION_SALT_ENV} environment variable to persist.")
         return salt
 
-    def derive_key(self, password: str, context: str) -> bytes:
+    def derive_key(self, password: str, context: Union[str, bytes]) -> bytes:
         """
         Derive encryption key using PBKDF2.
 
         Args:
             password: Password or seed for key derivation
-            context: Context string for key derivation (e.g., "session", "encryption")
+            context: Context string or bytes for key derivation (e.g., "session", "encryption")
 
         Returns:
             Derived key as bytes
         """
+        # Convert context to bytes if it's a string
+        context_bytes = context.encode('utf-8') if isinstance(context, str) else context
+        
         if CRYPTOGRAPHY_AVAILABLE:
             kdf = PBKDF2HMAC(
                 algorithm=hashes.SHA256(),
                 length=32,
-                salt=self.salt + context.encode(),
+                salt=self.salt + context_bytes,
                 iterations=self.iterations,
                 backend=default_backend()
             )
@@ -143,7 +147,7 @@ class KeyManager:
             return hashlib.pbkdf2_hmac(
                 'sha256',
                 password.encode(),
-                self.salt + context.encode(),
+                self.salt + context_bytes,
                 self.iterations
             )
 
@@ -350,24 +354,39 @@ class KeyManager:
 
     def validate_csrf_token(self, token: str, session_id: Optional[str] = None) -> bool:
         """
-        Validate a CSRF token.
+        Validate a CSRF token with reuse prevention.
         
         Args:
             token: CSRF token to validate
             session_id: Optional session ID for token binding
             
         Returns:
-            True if token is valid, False otherwise
+            True if token is valid and not previously used, False otherwise
         """
-        # For simplicity, we'll just check if the token is a valid hex string
-        # In production, you'd want to store and verify tokens against session data
+        # Check if token was already used (reuse prevention)
+        if token in self._used_csrf_tokens:
+            self._logger.warning(f"CSRF token reuse detected for session: {session_id}")
+            return False
+        
+        # Check if the token is a valid hex string
         try:
             int(token, 16)
-            self._logger.debug(f"Validated CSRF token for session: {session_id}")
-            return len(token) == 64  # 32 bytes = 64 hex characters
+            is_valid = len(token) == 64  # 32 bytes = 64 hex characters
         except ValueError:
-            self._logger.warning(f"Invalid CSRF token for session: {session_id}")
+            self._logger.warning(f"Invalid CSRF token format for session: {session_id}")
             return False
+        
+        if is_valid:
+            # Mark token as used to prevent reuse
+            self._used_csrf_tokens.add(token)
+            self._logger.debug(f"Validated CSRF token for session: {session_id}")
+            # Limit used tokens set size to prevent memory leak
+            if len(self._used_csrf_tokens) > 10000:
+                self._used_csrf_tokens.clear()
+        else:
+            self._logger.warning(f"Invalid CSRF token length for session: {session_id}")
+        
+        return is_valid
 
     def stop(self):
         """Stop cleanup thread"""
@@ -417,16 +436,30 @@ def get_api_key() -> str:
     return api_key
 
 
-def verify_api_key(credentials: Optional[HTTPAuthorizationCredentials]) -> None:
+def verify_api_key(credentials: Optional[Union[str, HTTPAuthorizationCredentials]]) -> bool:
     """
-    Verify API key from Authorization header.
+    Verify API key from Authorization header or plain string.
     
     Args:
-        credentials: HTTP Authorization credentials.
+        credentials: HTTP Authorization credentials or plain API key string.
+    
+    Returns:
+        True if valid, False otherwise (when called with string).
     
     Raises:
-        HTTPException: If authentication fails.
+        HTTPException: If authentication fails (when called with HTTPAuthorizationCredentials).
     """
+    # Handle plain string API key (used in tests)
+    if isinstance(credentials, str):
+        try:
+            expected_key = get_api_key()
+            if not credentials:
+                return False
+            return credentials == expected_key
+        except ValueError:
+            return False
+    
+    # Handle HTTPAuthorizationCredentials (used in web server)
     if not credentials:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -448,6 +481,8 @@ def verify_api_key(credentials: Optional[HTTPAuthorizationCredentials]) -> None:
             detail="Invalid API key",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    
+    return True
 
 
 def require_auth(func: Callable) -> Callable:

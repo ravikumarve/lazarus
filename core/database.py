@@ -225,6 +225,20 @@ class DatabaseManager:
                 )
             """)
             
+            # Security events table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS security_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER,
+                    event_type TEXT NOT NULL,
+                    ip_address TEXT,
+                    user_agent TEXT,
+                    details TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+                )
+            """)
+            
             # Rate limits table (for persistence)
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS rate_limits (
@@ -396,6 +410,133 @@ class DatabaseManager:
                     "created_at": row[4]
                 }
             return None
+
+    def update_user(self, user_id: int, updates: Dict[str, Any]) -> bool:
+        """
+        Update user information.
+        
+        Args:
+            user_id: User ID
+            updates: Dictionary of fields to update
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        with self.transaction() as conn:
+            cursor = conn.cursor()
+            
+            set_clauses = []
+            values = []
+            
+            for key, value in updates.items():
+                if key in ['email', 'api_key', 'owner_name']:
+                    set_clauses.append(f"{key} = ?")
+                    values.append(value)
+            
+            if not set_clauses:
+                return False
+            
+            values.append(user_id)
+            
+            cursor.execute(
+                f"UPDATE users SET {', '.join(set_clauses)}, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                values
+            )
+            
+            success = cursor.rowcount > 0
+            if success:
+                self._logger.info(f"Updated user: {user_id}")
+            return success
+
+    def create_configuration(self, user_id: int, config: LazarusConfig) -> int:
+        """
+        Create configuration for user.
+        
+        Args:
+            user_id: User ID
+            config: Lazarus configuration object
+            
+        Returns:
+            Configuration ID
+        """
+        with self.transaction() as conn:
+            cursor = conn.cursor()
+            
+            # Serialize storage config
+            storage_config_json = json.dumps(asdict(config.storage_config)) if config.storage_config else None
+            
+            cursor.execute(
+                """
+                INSERT INTO configurations (
+                    user_id, owner_email, beneficiary_name, beneficiary_email,
+                    beneficiary_public_key_path, check_in_interval_days,
+                    last_checkin_timestamp, armed, telegram_chat_id,
+                    license_key, subscription_tier, wallet_limit,
+                    license_valid_until, storage_config
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    user_id,
+                    config.owner_email,
+                    config.beneficiary.name,
+                    config.beneficiary.email,
+                    config.beneficiary.public_key_path,
+                    config.checkin_interval_days,
+                    datetime.fromtimestamp(config.last_checkin_timestamp) if config.last_checkin_timestamp else None,
+                    config.armed,
+                    config.telegram_chat_id,
+                    config.license_key,
+                    config.subscription_tier,
+                    config.wallet_limit,
+                    datetime.fromtimestamp(config.license_valid_until) if config.license_valid_until else None,
+                    storage_config_json
+                )
+            )
+            
+            config_id = cursor.lastrowid
+            
+            # Create vault entry
+            cursor.execute(
+                """
+                INSERT INTO vaults (
+                    configuration_id, secret_file_path, encrypted_file_path,
+                    key_blob, ipfs_cid
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    config_id,
+                    config.vault.secret_file_path,
+                    config.vault.encrypted_file_path,
+                    config.vault.key_blob,
+                    config.vault.ipfs_cid
+                )
+            )
+            
+            self._logger.info(f"Created configuration {config_id} for user {user_id}")
+            return config_id
+
+    def get_configuration(self, config_id: int) -> Optional[LazarusConfig]:
+        """
+        Get configuration by ID.
+        
+        Args:
+            config_id: Configuration ID
+            
+        Returns:
+            Lazarus configuration object or None
+        """
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT * FROM configurations WHERE id = ?
+                """,
+                (config_id,)
+            )
+            config_row = cursor.fetchone()
+            
+            if not config_row:
+                return None
             
             # Get vault
             cursor.execute(
@@ -800,15 +941,58 @@ class DatabaseManager:
             
             cursor.execute(
                 """
-                INSERT INTO events (configuration_id, event_type, content)
-                VALUES (?, ?, ?)
+                INSERT INTO security_events (user_id, event_type, ip_address, user_agent, details)
+                VALUES (?, ?, ?, ?, ?)
                 """,
-                (user_id or 0, event_type, details_json or "")
+                (user_id, event_type, ip_address, user_agent, details_json)
             )
             
             event_id = cursor.lastrowid
             self._logger.info(f"Logged security event: {event_type} (ID: {event_id})")
             return event_id
+
+    def get_security_events(
+        self,
+        user_id: int,
+        limit: int = 100
+    ) -> List[Dict[str, Any]]:
+        """
+        Retrieve security events for a user.
+        
+        Args:
+            user_id: User ID
+            limit: Maximum number of events to return
+            
+        Returns:
+            List of security event dictionaries
+        """
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT id, user_id, event_type, ip_address, user_agent, details, created_at
+                FROM security_events
+                WHERE user_id = ?
+                ORDER BY created_at DESC
+                LIMIT ?
+                """,
+                (user_id, limit)
+            )
+            rows = cursor.fetchall()
+            
+            events = []
+            for row in rows:
+                events.append({
+                    "id": row[0],
+                    "user_id": row[1],
+                    "event_type": row[2],
+                    "ip_address": row[3],
+                    "user_agent": row[4],
+                    "details": json.loads(row[5]) if row[5] else None,
+                    "created_at": row[6]
+                })
+            
+            return events
 
     def close(self) -> None:
         """Close all connections"""

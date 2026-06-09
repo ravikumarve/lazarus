@@ -146,12 +146,15 @@ class DistributedRateLimiter:
         key = f"rate_limit:user:{user_id}" if user_id else f"rate_limit:ip:{identifier}"
         
         if self.use_redis:
-            return self._is_allowed_redis(key, identifier)
+            return self._is_allowed_redis(key, identifier, request_limit, request_window)
         else:
-            return self._is_allowed_in_memory(key, identifier)
+            return self._is_allowed_in_memory(key, identifier, request_limit, request_window)
 
-    def _is_allowed_redis(self, key: str, identifier: str) -> RateLimitResult:
+    def _is_allowed_redis(self, key: str, identifier: str, request_limit: Optional[int] = None, request_window: Optional[int] = None) -> RateLimitResult:
         """Check rate limit using Redis"""
+        # Use provided limit/window or fall back to config
+        limit = request_limit if request_limit is not None else self.config.requests
+        window = request_window if request_window is not None else self.config.window
         try:
             pipe = self.redis.pipeline()
             pipe.get(f"{key}:count")
@@ -160,7 +163,11 @@ class DistributedRateLimiter:
             pipe.ttl(f"{key}:count")
             results = pipe.execute()
             
-            count, backoff, window_start, ttl = results
+            # Safely unpack pipeline results (handles mocks / missing keys)
+            if len(results) >= 4:
+                count, backoff, window_start, ttl = results
+            else:
+                count = backoff = window_start = ttl = None
             
             # Check if in backoff period
             if backoff:
@@ -193,26 +200,26 @@ class DistributedRateLimiter:
             # Initialize window if needed
             if not window_start:
                 window_start = time.time()
-                pipe.set(f"{key}:window_start", window_start, ex=self.config.window)
-                pipe.set(f"{key}:count", 0, ex=self.config.window)
+                pipe.set(f"{key}:window_start", window_start, ex=window)
+                pipe.set(f"{key}:count", 0, ex=window)
                 count = 0
             else:
                 window_start = float(window_start)
                 # Reset if window expired
-                if time.time() - window_start > self.config.window:
+                if time.time() - window_start > window:
                     pipe.delete(f"{key}:count")
                     pipe.delete(f"{key}:backoff")
-                    pipe.set(f"{key}:window_start", time.time(), ex=self.config.window)
-                    pipe.set(f"{key}:count", 0, ex=self.config.window)
+                    pipe.set(f"{key}:window_start", time.time(), ex=window)
+                    pipe.set(f"{key}:count", 0, ex=window)
                     count = 0
                 else:
                     count = int(count) if count else 0
             
             # Check if limit exceeded
-            if count >= self.config.requests:
+            if count >= limit:
                 # Calculate exponential backoff
                 backoff_time = min(
-                    self.config.backoff_base ** (count - self.config.requests + 1),
+                    self.config.backoff_base ** (count - limit + 1),
                     self.config.backoff_max
                 )
                 backoff_end = time.time() + backoff_time
@@ -222,23 +229,23 @@ class DistributedRateLimiter:
                 return RateLimitResult(
                     allowed=False,
                     retry_after=backoff_time,
-                    reason=f"Rate limit exceeded ({count}/{self.config.requests})"
+                    reason=f"Rate limit exceeded ({count}/{limit})"
                 )
             
             # Increment counter
             pipe.incr(f"{key}:count")
-            pipe.expire(f"{key}:count", self.config.window)
+            pipe.expire(f"{key}:count", window)
             pipe.execute()
             
             # Calculate remaining
-            remaining = self.config.requests - (count + 1)
-            reset_at = datetime.fromtimestamp(window_start + self.config.window)
+            remaining = limit - (count + 1)
+            reset_at = datetime.fromtimestamp(window_start + window)
             
             return RateLimitResult(
                 allowed=True,
                 remaining=remaining,
                 reset_at=reset_at,
-                limit=self.config.requests
+                limit=limit
             )
             
         except Exception as e:
@@ -265,8 +272,12 @@ class DistributedRateLimiter:
                 self._key_locks[key] = threading.Lock()
             return self._key_locks[key]
 
-    def _is_allowed_in_memory(self, key: str, identifier: str) -> RateLimitResult:
+    def _is_allowed_in_memory(self, key: str, identifier: str, request_limit: Optional[int] = None, request_window: Optional[int] = None) -> RateLimitResult:
         """Check rate limit using in-memory storage (fallback) with thread safety"""
+        # Use provided limit/window or fall back to config
+        limit = request_limit if request_limit is not None else self.config.requests
+        window = request_window if request_window is not None else self.config.window
+        
         # Get per-key lock for this specific identifier
         key_lock = self._get_key_lock(key)
         
@@ -289,7 +300,7 @@ class DistributedRateLimiter:
                 entry["count"] += 1
                 # Recalculate backoff with increased count
                 backoff_time = min(
-                    self.config.backoff_base ** (entry["count"] - self.config.requests + 1),
+                    self.config.backoff_base ** (entry["count"] - limit + 1),
                     self.config.backoff_max
                 )
                 # Update backoff time if it increased
@@ -305,16 +316,16 @@ class DistributedRateLimiter:
                 )
             
             # Reset if window expired
-            if now - entry["window_start"] > self.config.window:
+            if now - entry["window_start"] > window:
                 entry["count"] = 0
                 entry["window_start"] = now
                 entry["backoff_until"] = None
             
             # Check if limit exceeded
-            if entry["count"] >= self.config.requests:
+            if entry["count"] >= limit:
                 # Calculate exponential backoff
                 backoff_time = min(
-                    self.config.backoff_base ** (entry["count"] - self.config.requests + 1),
+                    self.config.backoff_base ** (entry["count"] - limit + 1),
                     self.config.backoff_max
                 )
                 entry["backoff_until"] = now + backoff_time
@@ -322,21 +333,21 @@ class DistributedRateLimiter:
                 return RateLimitResult(
                     allowed=False,
                     retry_after=backoff_time,
-                    reason=f"Rate limit exceeded ({entry['count']}/{self.config.requests})"
+                    reason=f"Rate limit exceeded ({entry['count']}/{limit})"
                 )
             
             # Increment counter
             entry["count"] += 1
             
             # Calculate remaining
-            remaining = self.config.requests - entry["count"]
-            reset_at = datetime.fromtimestamp(entry["window_start"] + self.config.window)
+            remaining = limit - entry["count"]
+            reset_at = datetime.fromtimestamp(entry["window_start"] + window)
             
             return RateLimitResult(
                 allowed=True,
                 remaining=remaining,
                 reset_at=reset_at,
-                limit=self.config.requests
+                limit=limit
             )
 
     def _check_ip_reputation(self, ip: str) -> bool:

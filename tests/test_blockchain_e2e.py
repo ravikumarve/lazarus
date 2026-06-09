@@ -14,6 +14,18 @@ import time
 from datetime import datetime, UTC, timedelta
 from decimal import Decimal
 
+# Skip all tests if web3 is not installed
+try:
+    from web3 import Web3
+    WEB3_AVAILABLE = True
+except ImportError:
+    WEB3_AVAILABLE = False
+
+pytestmark = pytest.mark.skipif(
+    not WEB3_AVAILABLE,
+    reason="web3.py is required for blockchain tests (pip install web3)"
+)
+
 from core.blockchain import (
     BlockchainManager,
     BlockchainConfig,
