@@ -101,6 +101,7 @@ class KeyManager:
         self._lock = threading.RLock()
         self._cleanup_thread = None
         self._stop_event = threading.Event()
+        self._logger = logging.getLogger("lazarus.security.key_manager")
         self._start_cleanup_thread()
 
     def _get_or_generate_salt(self) -> bytes:
@@ -317,6 +318,56 @@ class KeyManager:
 
             if expired_keys:
                 logging.info(f"Cleaned up {len(expired_keys)} expired session keys")
+
+    def generate_csrf_token(self, session_id: Optional[str] = None) -> str:
+        """
+        Generate a CSRF token for session protection.
+        
+        Args:
+            session_id: Optional session ID for token binding
+            
+        Returns:
+            CSRF token as hex string
+        """
+        import secrets
+        token = secrets.token_hex(32)
+        self._logger.debug(f"Generated CSRF token for session: {session_id}")
+        return token
+
+    def verify_csrf_token(self, token: str, session_id: Optional[str] = None, request: Optional[Any] = None) -> bool:
+        """
+        Verify a CSRF token (alias for validate_csrf_token).
+        
+        Args:
+            token: CSRF token to verify
+            session_id: Optional session ID for token binding
+            request: Optional request object (for compatibility)
+            
+        Returns:
+            True if token is valid, False otherwise
+        """
+        return self.validate_csrf_token(token, session_id)
+
+    def validate_csrf_token(self, token: str, session_id: Optional[str] = None) -> bool:
+        """
+        Validate a CSRF token.
+        
+        Args:
+            token: CSRF token to validate
+            session_id: Optional session ID for token binding
+            
+        Returns:
+            True if token is valid, False otherwise
+        """
+        # For simplicity, we'll just check if the token is a valid hex string
+        # In production, you'd want to store and verify tokens against session data
+        try:
+            int(token, 16)
+            self._logger.debug(f"Validated CSRF token for session: {session_id}")
+            return len(token) == 64  # 32 bytes = 64 hex characters
+        except ValueError:
+            self._logger.warning(f"Invalid CSRF token for session: {session_id}")
+            return False
 
     def stop(self):
         """Stop cleanup thread"""

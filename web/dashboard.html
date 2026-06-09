@@ -777,9 +777,9 @@
             <h3>🚨 Connection Error</h3>
             <p>Failed to connect to Lazarus server. Please ensure:</p>
             <ul>
-                <li>The Lazarus server is running on port 6666</li>
+                <li>The Lazarus server is running on port 5555</li>
                 <li>You have proper network access</li>
-                <li>The server URL is correct: <code>http://localhost:6666</code></li>
+                <li>The server URL is correct: <code>http://localhost:5555</code></li>
             </ul>
             <button class="btn btn-sm btn-secondary" onclick="loadStatus()">🔄 Retry Connection</button>
         </div>
@@ -1193,7 +1193,7 @@
                 
             } catch (error) {
                 console.error('Failed to load status:', error);
-                showError('Failed to connect to Lazarus server. Make sure the server is running on port 6666.');
+                showError('Failed to connect to Lazarus server. Make sure the server is running on port 5555.');
             }
         }
 

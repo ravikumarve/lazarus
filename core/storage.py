@@ -939,3 +939,187 @@ def remove_document_from_bundle(filename: str) -> bool:
         file_path.unlink()
         return True
     return False
+
+
+# ---------------------------------------------------------------------------
+# Email Service Functions
+# ---------------------------------------------------------------------------
+
+def send_email(
+    to: str,
+    subject: str,
+    body: str,
+    html_body: Optional[str] = None,
+    attachments: Optional[List[str]] = None
+) -> Dict[str, Any]:
+    """
+    Send email using SendGrid.
+    
+    Args:
+        to: Recipient email address
+        subject: Email subject
+        body: Plain text body
+        html_body: Optional HTML body
+        attachments: Optional list of file paths to attach
+        
+    Returns:
+        Dictionary with send status and message ID
+    """
+    import os
+    from sendgrid import SendGridAPIClient
+    from sendgrid.helpers.mail import Mail, Attachment, FileContent, FileName, FileType, Disposition
+    
+    api_key = os.environ.get("SENDGRID_API_KEY")
+    if not api_key:
+        logger.error("SENDGRID_API_KEY not configured")
+        return {"success": False, "error": "SendGrid not configured"}
+    
+    try:
+        message = Mail(
+            from_email="noreply@lazarusprotocol.com",
+            to_emails=to,
+            subject=subject,
+            plain_text_content=body
+        )
+        
+        if html_body:
+            message.template_id = None  # Clear template if using custom HTML
+            # For simplicity, we'll use plain text in this implementation
+        
+        # Add attachments if provided
+        if attachments:
+            for attachment_path in attachments:
+                with open(attachment_path, 'rb') as f:
+                    data = f.read()
+                    file_type = attachment_path.split('.')[-1]
+                    message.attachment = Attachment(
+                        FileContent(data),
+                        FileName(os.path.basename(attachment_path)),
+                        FileType(f"application/{file_type}"),
+                        Disposition('attachment')
+                    )
+        
+        sg = SendGridAPIClient(api_key)
+        response = sg.send(message)
+        
+        logger.info(f"Email sent to {to}: {response.status_code}")
+        return {
+            "success": True,
+            "status_code": response.status_code,
+            "message_id": response.headers.get('X-Message-Id')
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to send email: {e}")
+        return {"success": False, "error": str(e)}
+
+
+# ---------------------------------------------------------------------------
+# Telegram Service Functions
+# ---------------------------------------------------------------------------
+
+def send_telegram_message(
+    chat_id: str,
+    message: str,
+    parse_mode: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Send message via Telegram Bot API.
+    
+    Args:
+        chat_id: Telegram chat ID
+        message: Message text
+        parse_mode: Optional parse mode (HTML, Markdown)
+        
+    Returns:
+        Dictionary with send status
+    """
+    import os
+    import requests
+    
+    bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
+    if not bot_token:
+        logger.error("TELEGRAM_BOT_TOKEN not configured")
+        return {"success": False, "error": "Telegram not configured"}
+    
+    try:
+        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+        payload = {
+            "chat_id": chat_id,
+            "text": message
+        }
+        
+        if parse_mode:
+            payload["parse_mode"] = parse_mode
+        
+        response = requests.post(url, json=payload, timeout=30)
+        response.raise_for_status()
+        
+        logger.info(f"Telegram message sent to {chat_id}")
+        return {
+            "success": True,
+            "status_code": response.status_code,
+            "result": response.json()
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to send Telegram message: {e}")
+        return {"success": False, "error": str(e)}
+
+
+# ---------------------------------------------------------------------------
+# Pinata Functions
+# ---------------------------------------------------------------------------
+
+def pin_to_pinata(file_path: Path, config: Optional[StorageConfig] = None) -> Dict[str, Any]:
+    """
+    Pin file to Pinata IPFS pinning service.
+    
+    Args:
+        file_path: Path to file to pin
+        config: Optional storage configuration
+        
+    Returns:
+        Dictionary with pin status and CID
+    """
+    import os
+    import requests
+    
+    if config is None:
+        config = _get_default_config()
+    
+    api_key = config.pinata_api_key or os.environ.get("PINATA_API_KEY")
+    secret_key = config.pinata_secret_key or os.environ.get("PINATA_SECRET_KEY")
+    
+    if not api_key or not secret_key:
+        logger.error("Pinata credentials not configured")
+        return {"success": False, "error": "Pinata not configured"}
+    
+    try:
+        url = "https://api.pinata.cloud/pinning/pinFileToIPFS"
+        
+        headers = {
+            "pinata_api_key": api_key,
+            "pinata_secret_api_key": secret_key
+        }
+        
+        files = {
+            "file": (file_path.name, open(file_path, "rb"))
+        }
+        
+        response = requests.post(url, files=files, headers=headers, timeout=config.timeout)
+        response.raise_for_status()
+        
+        result = response.json()
+        cid = result.get("IpfsHash")
+        
+        logger.info(f"File pinned to Pinata: {cid}")
+        return {
+            "success": True,
+            "cid": cid,
+            "status_code": response.status_code
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to pin to Pinata: {e}")
+        return {"success": False, "error": str(e)}

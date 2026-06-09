@@ -527,4 +527,85 @@ def load_private_key_from_file(path: Path, password: bytes | None = None) -> byt
         )
     except Exception as exc:
         raise ValueError(f"Invalid RSA private key at {path}: {exc}") from exc
+
+
+# ---------------------------------------------------------------------------
+# General data encryption functions
+# ---------------------------------------------------------------------------
+
+
+def encrypt_data(data: Union[str, bytes], key: bytes) -> bytes:
+    """
+    Encrypt general data (string or bytes) using AES-256-GCM.
+    
+    Args:
+        data: Data to encrypt (string or bytes)
+        key: 256-bit (32-byte) encryption key
+        
+    Returns:
+        Encrypted data as bytes (nonce + ciphertext + tag)
+        
+    Raises:
+        ValueError: If key is not 32 bytes
+    """
+    if len(key) != 32:
+        raise ValueError(f"Key must be 32 bytes, got {len(key)}")
+    
+    # Convert string to bytes if necessary
+    if isinstance(data, str):
+        data_bytes = data.encode('utf-8')
+    else:
+        data_bytes = data
+    
+    # Generate nonce
+    nonce = os.urandom(12)
+    
+    # Encrypt
+    cipher = Cipher(
+        algorithms.AES(key),
+        modes.GCM(nonce),
+        backend=default_backend()
+    )
+    encryptor = cipher.encryptor()
+    ciphertext = encryptor.update(data_bytes) + encryptor.finalize()
+    
+    # Return nonce + ciphertext + tag
+    return nonce + ciphertext + encryptor.tag
+
+
+def decrypt_data(encrypted_data: bytes, key: bytes) -> bytes:
+    """
+    Decrypt data encrypted with encrypt_data.
+    
+    Args:
+        encrypted_data: Encrypted data (nonce + ciphertext + tag)
+        key: 256-bit (32-byte) decryption key
+        
+    Returns:
+        Decrypted data as bytes
+        
+    Raises:
+        ValueError: If key is not 32 bytes or data is invalid
+    """
+    if len(key) != 32:
+        raise ValueError(f"Key must be 32 bytes, got {len(key)}")
+    
+    if len(encrypted_data) < 28:  # 12 bytes nonce + 16 bytes tag + at least 1 byte ciphertext
+        raise ValueError("Encrypted data too short")
+    
+    # Extract nonce, ciphertext, and tag
+    nonce = encrypted_data[:12]
+    tag = encrypted_data[-16:]
+    ciphertext = encrypted_data[12:-16]
+    
+    # Decrypt
+    cipher = Cipher(
+        algorithms.AES(key),
+        modes.GCM(nonce, tag),
+        backend=default_backend()
+    )
+    decryptor = cipher.decryptor()
+    plaintext = decryptor.update(ciphertext) + decryptor.finalize()
+    
+    return plaintext
     return pem

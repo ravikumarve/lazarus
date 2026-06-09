@@ -2,8 +2,8 @@
 """
 web/server.py — FastAPI server for Lazarus Protocol Dashboard
 
-Run: uvicorn web.server:app --host 0.0.0.0 --port 6666
-Access: http://localhost:6666
+Run: uvicorn web.server:app --host 0.0.0.0 --port 5555
+Access: http://localhost:5555
 """
 
 import os
@@ -100,7 +100,7 @@ async def security_middleware(request: Request, call_next):
 # Add CORS middleware (restrictive)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:6666", "http://127.0.0.1:6666"],
+    allow_origins=["http://localhost:5555", "http://127.0.0.1:5555"],
     allow_credentials=True,
     allow_methods=["GET", "POST", "DELETE"],
     allow_headers=["Authorization", "Content-Type", "X-CSRF-Token"],
@@ -762,7 +762,7 @@ if __name__ == "__main__":
     from pathlib import Path
 
     # Get configuration from environment variables
-    port = int(os.environ.get("LAZARUS_PORT", 6666))
+    port = int(os.environ.get("LAZARUS_PORT", 5555))
     host = os.environ.get("LAZARUS_HOST", "0.0.0.0")
     ssl_cert_file = os.environ.get("LAZARUS_SSL_CERT_FILE")
     ssl_key_file = os.environ.get("LAZARUS_SSL_KEY_FILE")

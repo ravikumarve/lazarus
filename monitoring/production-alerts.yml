@@ -1,0 +1,210 @@
+groups:
+  - name: lazarus_alerts
+    interval: 30s
+    rules:
+      # Application Health Alerts
+      - alert: ApplicationDown
+        expr: up{job="lazarus"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: operations
+        annotations:
+          summary: "Lazarus application is down"
+          description: "Lazarus application has been down for more than 1 minute."
+
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          team: operations
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value | humanizePercentage }} for the last 5 minutes."
+
+      # Performance Alerts
+      - alert: HighResponseTime
+        expr: histogram_quantile(0.95, http_request_duration_seconds) > 1
+        for: 5m
+        labels:
+          severity: warning
+          team: operations
+        annotations:
+          summary: "High response time detected"
+          description: "95th percentile response time is {{ $value }}s."
+
+      - alert: HighMemoryUsage
+        expr: (container_memory_usage_bytes{name="lazarus"} / container_spec_memory_limit_bytes{name="lazarus"}) > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          team: operations
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value | humanizePercentage }}."
+
+      - alert: HighCPUUsage
+        expr: rate(container_cpu_usage_seconds_total{name="lazarus"}[5m]) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          team: operations
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is {{ $value | humanizePercentage }}."
+
+      # Database Alerts
+      - alert: DatabaseConnectionPoolExhausted
+        expr: db_connections_active / db_connections_max > 0.9
+        for: 5m
+        labels:
+          severity: critical
+          team: operations
+        annotations:
+          summary: "Database connection pool exhausted"
+          description: "Database connection pool usage is {{ $value | humanizePercentage }}."
+
+      - alert: DatabaseQuerySlow
+        expr: histogram_quantile(0.95, db_query_duration_seconds) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          team: operations
+        annotations:
+          summary: "Slow database queries detected"
+          description: "95th percentile query time is {{ $value }}s."
+
+      - alert: DatabaseSizeGrowing
+        expr: rate(db_size_bytes[1h]) > 10485760
+        for: 1h
+        labels:
+          severity: info
+          team: operations
+        annotations:
+          summary: "Database size growing rapidly"
+          description: "Database is growing at {{ $value | humanize }}B/h."
+
+      # Storage Alerts
+      - alert: DiskSpaceLow
+        expr: (node_filesystem_avail_bytes{mountpoint="/data"} / node_filesystem_size_bytes{mountpoint="/data"}) < 0.1
+        for: 5m
+        labels:
+          severity: critical
+          team: operations
+        annotations:
+          summary: "Low disk space"
+          description: "Disk space is {{ $value | humanizePercentage }} available."
+
+      - alert: BackupFailed
+        expr: backup_success == 0
+        for: 1h
+        labels:
+          severity: critical
+          team: operations
+        annotations:
+          summary: "Backup failed"
+          description: "Last backup failed or did not complete."
+
+      - alert: BackupOld
+        expr: time() - backup_last_success_timestamp > 86400
+        for: 1h
+        labels:
+          severity: warning
+          team: operations
+        annotations:
+          summary: "Backup is old"
+          description: "Last successful backup was {{ $value | humanizeDuration }} ago."
+
+      # Security Alerts
+      - alert: HighRateLimitViolations
+        expr: rate(rate_limit_violations_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+          team: security
+        annotations:
+          summary: "High rate limit violations"
+          description: "Rate limit violations are occurring at {{ $value }}/s."
+
+      - alert: FailedAuthenticationAttempts
+        expr: rate(authentication_failures_total[5m]) > 5
+        for: 5m
+        labels:
+          severity: warning
+          team: security
+        annotations:
+          summary: "High failed authentication attempts"
+          description: "Failed authentication attempts are occurring at {{ $value }}/s."
+
+      # Business Metrics Alerts
+      - alert: LowActiveConfigurations
+        expr: active_configurations < 10
+        for: 1h
+        labels:
+          severity: info
+          team: business
+        annotations:
+          summary: "Low number of active configurations"
+          description: "Only {{ $value }} active configurations."
+
+      - alert: PendingCheckinsHigh
+        expr: pending_checkins > 100
+        for: 1h
+        labels:
+          severity: warning
+          team: business
+        annotations:
+          summary: "High number of pending check-ins"
+          description: "{{ $value }} pending check-ins."
+
+      - alert: EmergencyTriggerRate
+        expr: rate(emergency_triggers_total[1h]) > 0.1
+        for: 1h
+        labels:
+          severity: critical
+          team: business
+        annotations:
+          summary: "Emergency triggers detected"
+          description: "Emergency triggers are occurring at {{ $value }}/h."
+
+      # Infrastructure Alerts
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: operations
+        annotations:
+          summary: "Redis is down"
+          description: "Redis has been down for more than 1 minute."
+
+      - alert: RedisMemoryHigh
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          team: operations
+        annotations:
+          summary: "Redis memory usage high"
+          description: "Redis memory usage is {{ $value | humanizePercentage }}."
+
+      - alert: PrometheusDown
+        expr: up{job="prometheus"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: operations
+        annotations:
+          summary: "Prometheus is down"
+          description: "Prometheus has been down for more than 1 minute."
+
+      - alert: GrafanaDown
+        expr: up{job="grafana"} == 0
+        for: 1m
+        labels:
+          severity: warning
+          team: operations
+        annotations:
+          summary: "Grafana is down"
+          description: "Grafana has been down for more than 1 minute."

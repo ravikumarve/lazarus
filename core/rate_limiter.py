@@ -49,6 +49,10 @@ class RateLimitResult:
     reset_at: Optional[datetime] = None
     limit: Optional[int] = None
     reason: Optional[str] = None
+    
+    def __iter__(self):
+        """Make RateLimitResult iterable for unpacking"""
+        return iter((self.allowed, self.remaining))
 
 
 class DistributedRateLimiter:
@@ -66,7 +70,9 @@ class DistributedRateLimiter:
     def __init__(
         self,
         redis_client: Optional['redis.Redis'] = None,
-        config: Optional[RateLimitConfig] = None
+        config: Optional[RateLimitConfig] = None,
+        default_limit: Optional[int] = None,
+        default_window: Optional[int] = None
     ):
         """
         Initialize distributed rate limiter.
@@ -74,8 +80,18 @@ class DistributedRateLimiter:
         Args:
             redis_client: Redis client instance (optional, will create if not provided)
             config: Rate limit configuration (optional, uses defaults if not provided)
+            default_limit: Optional default limit to override config.requests (for backward compatibility)
+            default_window: Optional default window to override config.window (for backward compatibility)
         """
         self.config = config or RateLimitConfig()
+        
+        # Override config.requests if default_limit is provided
+        if default_limit is not None:
+            self.config.requests = default_limit
+        
+        # Override config.window if default_window is provided
+        if default_window is not None:
+            self.config.window = default_window
         
         if REDIS_AVAILABLE and redis_client:
             self.redis = redis_client
@@ -97,7 +113,9 @@ class DistributedRateLimiter:
         self,
         identifier: str,
         user_id: Optional[str] = None,
-        check_ip_reputation: bool = True
+        check_ip_reputation: bool = True,
+        limit: Optional[int] = None,
+        window: Optional[int] = None
     ) -> RateLimitResult:
         """
         Check if request is allowed with rate limiting.
@@ -106,10 +124,16 @@ class DistributedRateLimiter:
             identifier: IP address or unique identifier
             user_id: Optional user ID for user-based limiting
             check_ip_reputation: Whether to check IP reputation
+            limit: Optional custom limit for this request (overrides config)
+            window: Optional custom window for this request (overrides config)
 
         Returns:
             RateLimitResult with allowed status and metadata
         """
+        # Use custom limit if provided, otherwise use config
+        request_limit = limit if limit is not None else self.config.requests
+        request_window = window if window is not None else self.config.window
+        
         # Check IP reputation first
         if check_ip_reputation and not self._check_ip_reputation(identifier):
             return RateLimitResult(
