@@ -21,7 +21,7 @@ if _env_path.exists():
         pass  # dotenv not installed, env must be set manually
 
 from fastapi import FastAPI, HTTPException, Request, Response, status
-from fastapi.responses import HTMLResponse, FileResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, FileResponse, RedirectResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import Optional
@@ -80,13 +80,11 @@ async def security_middleware(request: Request, call_next):
                     f"Path: {path}, Reason: {result.reason}",
                     level=30
                 )
-                raise HTTPException(
+                return JSONResponse(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    detail=f"Rate limit exceeded. {result.reason}",
+                    content={"detail": f"Rate limit exceeded. {result.reason}"},
                     headers={"Retry-After": str(result.retry_after)}
                 )
-        except HTTPException:
-            raise
         except Exception as e:
             # Log error but allow request if rate limiting fails
             log_security_event(
@@ -362,6 +360,15 @@ def logo():
     if svg_path.exists():
         return FileResponse(svg_path, media_type="image/svg+xml")
     raise HTTPException(status_code=404, detail="Logo not found")
+
+
+@app.get("/favicon.ico")
+def favicon():
+    """Serve favicon.ico (redirect to SVG logo)."""
+    svg_path = Path(__file__).parent.parent / "lazarus-logo.svg"
+    if svg_path.exists():
+        return FileResponse(svg_path, media_type="image/svg+xml")
+    raise HTTPException(status_code=404, detail="Favicon not found")
 
 
 @app.get("/pricing")
