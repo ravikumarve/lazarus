@@ -57,7 +57,7 @@ body {
 
 /* ── Form Overrides ──────────────────────────────────────── */
 .form-group input {
-    background-color: var(--primary-color);
+    background: var(--input-bg);
 }
 
 /* ── Info Message ────────────────────────────────────────── */

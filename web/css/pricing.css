@@ -199,7 +199,7 @@ td {
 
 .back-link:hover {
     color: var(--text-color);
-    background-color: rgba(255, 255, 255, 0.05);
+    background-color: var(--surface-bg);
     transform: translateX(-4px);
 }
 
@@ -210,7 +210,7 @@ td {
     font-size: 0.9rem;
     margin-top: 40px;
     padding: 20px;
-    background-color: rgba(255, 255, 255, 0.05);
+    background-color: var(--surface-bg);
     border-radius: 12px;
     border: 1px solid var(--border-color);
 }
