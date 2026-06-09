@@ -5,30 +5,31 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" type="image/svg+xml" href="/lazarus-logo.svg" />
     <title>Lazarus Protocol Dashboard</title>
+    <link rel="stylesheet" href="/css/base.css">
     <link rel="stylesheet" href="/css/dashboard.css">
     <script src="https://unpkg.com/lucide@latest" defer></script>
 </head>
 <body>
-    <div class="theme-toggle" onclick="toggleTheme()" title="Toggle theme">
+    <button class="theme-toggle" title="Toggle theme" aria-label="Toggle theme">
         🌓
-    </div>
+    </button>
 
     <div class="app-container">
         <div class="header">
             <h1>⚰️ Lazarus Protocol Dashboard</h1>
             <p>Monitor and manage your digital legacy protocol</p>
             <div class="header-actions">
-                <button class="btn btn-sm btn-secondary" onclick="loadStatus()" title="Refresh status">
-                    🔄 Refresh
+                <button class="btn btn-sm btn-secondary" data-action="refresh-status" title="Refresh status">
+                    <i data-lucide="refresh-cw"></i> Refresh
                 </button>
-                <button class="btn btn-sm btn-secondary" onclick="showApiDocsModal()" title="View API documentation">
-                    📚 API Docs
+                <button class="btn btn-sm btn-secondary" data-action="show-api-docs" title="View API documentation">
+                    <i data-lucide="book-open"></i> API Docs
                 </button>
-                <button class="btn btn-sm btn-secondary" onclick="window.location.href='/pricing'" title="View pricing plans">
-                    💰 Pricing
+                <button class="btn btn-sm btn-secondary" data-action="go-pricing" title="View pricing plans">
+                    <i data-lucide="credit-card"></i> Pricing
                 </button>
-                <button class="btn btn-sm btn-secondary" onclick="showApiKeyModal()" title="Set API key">
-                    🔑 API Key
+                <button class="btn btn-sm btn-secondary" data-action="show-api-key" title="Set API key">
+                    <i data-lucide="key"></i> API Key
                 </button>
             </div>
         </div>
@@ -39,14 +40,14 @@
         </div>
 
         <div id="error" class="error" style="display: none;">
-            <h3>🚨 Connection Error</h3>
+            <h3><i data-lucide="alert-triangle"></i> Connection Error</h3>
             <p>Failed to connect to Lazarus server. Please ensure:</p>
             <ul>
                 <li>The Lazarus server is running on port 5555</li>
                 <li>You have proper network access</li>
                 <li>The server URL is correct: <code>http://localhost:5555</code></li>
             </ul>
-            <button class="btn btn-sm btn-secondary" onclick="loadStatus()">🔄 Retry Connection</button>
+            <button class="btn btn-sm btn-secondary" data-action="refresh-status"><i data-lucide="refresh-cw"></i> Retry Connection</button>
         </div>
 
         <div id="dashboard" style="display: none;">
@@ -76,7 +77,7 @@
             <div class="grid">
                 <!-- Status Panel -->
                 <div class="card">
-                    <h2>📊 Status Overview</h2>
+                    <h2><i data-lucide="bar-chart-3"></i> Status Overview</h2>
                     <div id="status-items">
                         <div class="status-item">
                             <span class="status-label">Protocol State:</span>
@@ -111,26 +112,26 @@
 
                 <!-- Quick Actions -->
                 <div class="card">
-                    <h2>⚡ Quick Actions</h2>
+                    <h2><i data-lucide="zap"></i> Quick Actions</h2>
                     <div class="actions-grid">
                         <div class="action-card">
-                            <span class="action-icon">📍</span>
-                            <button id="ping-btn" class="btn btn-primary" onclick="handlePing()">
-                                Ping Check-in
+                            <span class="action-icon"><i data-lucide="map-pin"></i></span>
+                            <button id="ping-btn" class="btn btn-primary" data-action="ping">
+                                <i data-lucide="map-pin"></i> Ping Check-in
                             </button>
                             <p class="status-label">Record your presence</p>
                         </div>
                         <div class="action-card">
-                            <span class="action-icon">❄️</span>
-                            <button id="freeze-btn" class="btn btn-secondary" onclick="showFreezeModal()">
-                                Extend Deadline
+                            <span class="action-icon"><i data-lucide="snowflake"></i></span>
+                            <button id="freeze-btn" class="btn btn-secondary" data-action="show-freeze-modal">
+                                <i data-lucide="snowflake"></i> Extend Deadline
                             </button>
                             <p class="status-label">Add more time</p>
                         </div>
                         <div class="action-card">
-                            <span class="action-icon">🔄</span>
-                            <button id="refresh-btn" class="btn btn-secondary" onclick="loadStatus()">
-                                Refresh Status
+                            <span class="action-icon"><i data-lucide="refresh-cw"></i></span>
+                            <button id="refresh-btn" class="btn btn-secondary" data-action="refresh-status">
+                                <i data-lucide="refresh-cw"></i> Refresh Status
                             </button>
                             <p class="status-label">Update information</p>
                         </div>
@@ -141,16 +142,16 @@
 
                 <!-- Bundle Management -->
                 <div class="card">
-                    <h2>📦 Document Bundle</h2>
+                    <h2><i data-lucide="package"></i> Document Bundle</h2>
                     <div id="bundle-info">
                         <div class="loading">Loading bundle information...</div>
                     </div>
                     <div class="actions-grid" style="margin-top: 20px;">
-                        <button class="btn btn-secondary btn-sm" onclick="showAddDocumentModal()">
-                            ➕ Add Document
+                        <button class="btn btn-secondary btn-sm" data-action="show-add-doc-modal">
+                            <i data-lucide="plus-circle"></i> Add Document
                         </button>
-                        <button class="btn btn-secondary btn-sm" onclick="refreshBundle()">
-                            🔄 Refresh Bundle
+                        <button class="btn btn-secondary btn-sm" data-action="refresh-bundle">
+                            <i data-lucide="refresh-cw"></i> Refresh Bundle
                         </button>
                     </div>
                 </div>
@@ -158,16 +159,16 @@
 
             <!-- Recent Events -->
             <div class="card">
-                <h2>📋 Recent Activity</h2>
+                <h2><i data-lucide="clipboard-list"></i> Recent Activity</h2>
                 <div class="actions-grid" style="margin-bottom: 20px;">
-                    <button class="btn btn-secondary btn-sm" onclick="loadEvents(20)">
+                    <button class="btn btn-secondary btn-sm" data-action="events-20">
                         Last 20 Events
                     </button>
-                    <button class="btn btn-secondary btn-sm" onclick="loadEvents(50)">
+                    <button class="btn btn-secondary btn-sm" data-action="events-50">
                         Last 50 Events
                     </button>
-                    <button class="btn btn-secondary btn-sm" onclick="clearEventsCache()">
-                        🗑️ Clear Cache
+                    <button class="btn btn-secondary btn-sm" data-action="clear-cache">
+                        <i data-lucide="trash-2"></i> Clear Cache
                     </button>
                 </div>
                 <div id="events-list" class="events-list">
@@ -177,7 +178,7 @@
 
             <!-- System Information -->
             <div class="card">
-                <h2>🖥️ System Info</h2>
+                <h2><i data-lucide="monitor"></i> System Info</h2>
                 <div class="status-item">
                     <span class="status-label">Server Version:</span>
                     <span id="server-version" class="status-value">v1.0.0</span>
@@ -197,15 +198,15 @@
     <!-- Freeze Modal -->
     <div id="freeze-modal" class="modal" style="display: none;">
         <div class="modal-content">
-            <h3>❄️ Extend Deadline</h3>
+            <h3><i data-lucide="snowflake"></i> Extend Deadline</h3>
             <p class="status-label">Add more days before the protocol triggers</p>
             <div class="form-group">
                 <label for="freeze-days">Number of days to extend:</label>
                 <input type="number" id="freeze-days" value="30" min="1" max="365" placeholder="Enter days (1-365)">
             </div>
             <div class="modal-actions">
-                <button class="btn btn-primary" onclick="handleFreeze()">✅ Confirm</button>
-                <button class="btn btn-secondary" onclick="hideFreezeModal()">❌ Cancel</button>
+                <button class="btn btn-primary" data-action="freeze-confirm"><i data-lucide="check"></i> Confirm</button>
+                <button class="btn btn-secondary" data-action="freeze-cancel"><i data-lucide="x"></i> Cancel</button>
             </div>
         </div>
     </div>
@@ -213,7 +214,7 @@
     <!-- Add Document Modal -->
     <div id="add-document-modal" class="modal" style="display: none;">
         <div class="modal-content">
-            <h3>📄 Add Document to Bundle</h3>
+            <h3><i data-lucide="file-text"></i> Add Document to Bundle</h3>
             <p class="status-label">Add files to be delivered to your beneficiaries</p>
             <div class="form-group">
                 <label for="document-path">File Path:</label>
@@ -230,8 +231,8 @@
                 </select>
             </div>
             <div class="modal-actions">
-                <button class="btn btn-primary" onclick="handleAddDocument()">✅ Add Document</button>
-                <button class="btn btn-secondary" onclick="hideAddDocumentModal()">❌ Cancel</button>
+                <button class="btn btn-primary" data-action="add-doc-confirm"><i data-lucide="check"></i> Add Document</button>
+                <button class="btn btn-secondary" data-action="add-doc-cancel"><i data-lucide="x"></i> Cancel</button>
             </div>
         </div>
     </div>
@@ -239,7 +240,7 @@
         <!-- API Key Modal -->
     <div id="apikey-modal" class="modal" style="display: none;">
         <div class="modal-content" style="max-width: 500px;">
-            <h3>🔑 API Key</h3>
+            <h3><i data-lucide="key"></i> API Key</h3>
             <p id="apikey-message" style="margin-bottom: 15px; color: var(--text-secondary, '#aaa');">
                 This dashboard requires an API key to communicate with the Lazarus server.
                 Set the <code>LAZARUS_API_KEY</code> environment variable when starting the server,
@@ -252,8 +253,8 @@
                        placeholder="Paste your Lazarus API key here">
             </div>
             <div class="modal-actions" style="margin-top: 15px;">
-                <button class="btn btn-primary" onclick="handleApiKeySubmit()">💾 Save Key</button>
-                <button class="btn btn-secondary" onclick="hideApiKeyModal()">❌ Cancel</button>
+                <button class="btn btn-primary" data-action="apikey-save"><i data-lucide="save"></i> Save Key</button>
+                <button class="btn btn-secondary" data-action="apikey-cancel"><i data-lucide="x"></i> Cancel</button>
             </div>
         </div>
     </div>
@@ -261,7 +262,7 @@
     <!-- API Docs Modal -->
     <div id="api-docs-modal" class="modal" style="display: none;">
         <div class="modal-content" style="max-width: 800px;">
-            <h3>📚 API Documentation</h3>
+            <h3><i data-lucide="book-open"></i> API Documentation</h3>
             <div class="api-docs">
                 <h4>Available Endpoints:</h4>
                 <div class="endpoint">
@@ -286,7 +287,7 @@
                 </div>
             </div>
             <div class="modal-actions">
-                <button class="btn btn-secondary" onclick="hideApiDocsModal()">Close</button>
+                <button class="btn btn-secondary" data-action="apidocs-close">Close</button>
             </div>
         </div>
     </div>
@@ -482,11 +483,14 @@
             loadingEl.style.display = 'none';
             errorEl.style.display = 'block';
             errorEl.innerHTML = `
-                <h3>🚨 Connection Error</h3>
+                <h3><i data-lucide="alert-triangle"></i> Connection Error</h3>
                 <p>${message}</p>
-                <button class="btn btn-sm btn-secondary" onclick="loadStatus()">🔄 Retry Connection</button>
+                <button class="btn btn-sm btn-secondary" data-action="refresh-status"><i data-lucide="refresh-cw"></i> Retry Connection</button>
             `;
             dashboardEl.style.display = 'none';
+            // Wire dynamically created retry button
+            const retryBtn = errorEl.querySelector('[data-action="refresh-status"]');
+            if (retryBtn) retryBtn.addEventListener('click', loadStatus);
         }
 
         // Show dashboard
@@ -742,7 +746,7 @@
                 showFeedback('Failed to record check-in: ' + error.message, 'error');
             } finally {
                 pingBtn.disabled = false;
-                pingBtn.innerHTML = '📍 Ping Check-in';
+                pingBtn.innerHTML = '<i data-lucide="map-pin"></i> Ping Check-in';
             }
         }
 
@@ -835,12 +839,48 @@
             }
         }
 
+        // ── Event Listener Wiring ────────────────────────────────────
+        function setupEventListeners() {
+            const actions = {
+                'refresh-status': loadStatus,
+                'show-api-docs': showApiDocsModal,
+                'go-pricing': () => { window.location.href = '/pricing'; },
+                'show-api-key': showApiKeyModal,
+                'ping': handlePing,
+                'show-freeze-modal': showFreezeModal,
+                'show-add-doc-modal': showAddDocumentModal,
+                'refresh-bundle': refreshBundle,
+                'events-20': () => loadEvents(20),
+                'events-50': () => loadEvents(50),
+                'clear-cache': clearEventsCache,
+                'freeze-confirm': handleFreeze,
+                'freeze-cancel': hideFreezeModal,
+                'add-doc-confirm': handleAddDocument,
+                'add-doc-cancel': hideAddDocumentModal,
+                'apikey-save': handleApiKeySubmit,
+                'apikey-cancel': hideApiKeyModal,
+                'apidocs-close': hideApiDocsModal,
+            };
+
+            document.querySelectorAll('[data-action]').forEach(el => {
+                const action = el.dataset.action;
+                if (actions[action]) {
+                    el.addEventListener('click', actions[action]);
+                }
+            });
+
+            // Theme toggle
+            const themeToggle = document.querySelector('.theme-toggle');
+            if (themeToggle) themeToggle.addEventListener('click', toggleTheme);
+        }
+
         // Auto-refresh every 30 seconds
         setInterval(loadStatus, 30000);
 
         // Initial load with saved theme
         document.addEventListener('DOMContentLoaded', () => {
             loadSavedTheme();
+            setupEventListeners();
             loadStatus();
         });
 

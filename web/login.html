@@ -10,11 +10,12 @@
     <meta name="description" content="Lazarus Protocol Login - Secure authentication for crypto dead man's switch">
     <link rel="icon" type="image/svg+xml" href="/lazarus-logo.svg" />
     <title>Lazarus Protocol - Login</title>
+    <link rel="stylesheet" href="/css/base.css">
     <link rel="stylesheet" href="/css/login.css">
     <script src="https://unpkg.com/lucide@latest" defer></script>
 </head>
 <body>
-    <div class="theme-toggle" onclick="toggleTheme()" title="Toggle theme" style="position: fixed; top: 20px; right: 20px; z-index: 1000; background: var(--card-bg); border: 2px solid var(--border-color); border-radius: 50%; width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: var(--transition); box-shadow: var(--shadow);">🌓</div>
+    <button class="theme-toggle" title="Toggle theme" aria-label="Toggle theme">🌓</button>
     <div class="login-container">
         <div class="login-card fade-in">
             <div class="login-header">
@@ -101,6 +102,9 @@
         // Check if already authenticated
         document.addEventListener('DOMContentLoaded', () => {
             loadSavedTheme();
+            // Wire theme toggle
+            const themeToggle = document.querySelector('.theme-toggle');
+            if (themeToggle) themeToggle.addEventListener('click', toggleTheme);
             if (security.isAuthenticated()) {
                 // Redirect to dashboard if already authenticated
                 window.location.href = '/dashboard';

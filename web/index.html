@@ -185,9 +185,9 @@
 
     <main class="relative z-10 flex flex-col items-center justify-center min-h-screen px-6 pt-20 text-center">
         <div class="fade-in-up delay-1 mb-6">
-            <span class="inline-block px-4 py-1 text-[10px] tracking-[0.3em] uppercase border border-blood/30 text-blood/70 backdrop-blur-sm">
-                🎉 Production Ready: 90/100 · 4 Sprints Complete
-            </span>
+                <span class="inline-block px-4 py-1 text-[10px] tracking-[0.3em] uppercase border border-blood/30 text-blood/70 backdrop-blur-sm flex items-center gap-1">
+                    <i data-lucide="party-popper" class="w-3 h-3"></i> Production Ready: 90/100 · 4 Sprints Complete
+                </span>
         </div>
         
         <h1 class="font-cinematic text-5xl md:text-7xl lg:text-8xl font-bold tracking-[0.1em] mb-8 leading-tight fade-in-up delay-2">
@@ -251,7 +251,7 @@
 
             <div class="grid lg:grid-cols-3 gap-8">
                 <div class="smoked-glass p-10">
-                    <div class="text-blood mb-8 text-3xl font-light">🔐</div>
+                    <div class="text-blood mb-8 text-3xl font-light flex items-center justify-center"><i data-lucide="lock"></i></div>
                     <h3 class="font-cinematic text-xl text-white tracking-[0.1em] mb-4">Military-Grade Encryption</h3>
                     <p class="text-sm font-light text-silver leading-relaxed mb-6">
                         AES-256-GCM + RSA-4096 hybrid encryption ensures your secrets remain completely protected until final delivery.
@@ -259,7 +259,7 @@
                 </div>
 
                 <div class="smoked-glass p-10">
-                    <div class="text-blood mb-8 text-3xl font-light">🏠</div>
+                    <div class="text-blood mb-8 text-3xl font-light flex items-center justify-center"><i data-lucide="home"></i></div>
                     <h3 class="font-cinematic text-xl text-white tracking-[0.1em] mb-4">Self-Hosted</h3>
                     <p class="text-sm font-light text-silver leading-relaxed mb-6">
                         No cloud dependencies. Your data never leaves your control. Run entirely on your own hardware.
@@ -267,7 +267,7 @@
                 </div>
 
                 <div class="smoked-glass p-10">
-                    <div class="text-blood mb-8 text-3xl font-light">⚡</div>
+                    <div class="text-blood mb-8 text-3xl font-light flex items-center justify-center"><i data-lucide="zap"></i></div>
                     <h3 class="font-cinematic text-xl text-white tracking-[0.1em] mb-4">Automated Monitoring</h3>
                     <p class="text-sm font-light text-silver leading-relaxed mb-6">
                         Background agent with configurable check-in intervals and intelligent escalation protocols to prevent accidental triggers.
@@ -275,7 +275,7 @@
                 </div>
 
                 <div class="smoked-glass p-10">
-                    <div class="text-blood mb-8 text-3xl font-light">🌐</div>
+                    <div class="text-blood mb-8 text-3xl font-light flex items-center justify-center"><i data-lucide="globe"></i></div>
                     <h3 class="font-cinematic text-xl text-white tracking-[0.1em] mb-4">Web Dashboard</h3>
                     <p class="text-sm font-light text-silver leading-relaxed mb-6">
                         Professional React-inspired interface with dark/light themes and full mobile responsive design architecture.
@@ -283,7 +283,7 @@
                 </div>
 
                 <div class="smoked-glass p-10">
-                    <div class="text-blood mb-8 text-3xl font-light">📱</div>
+                    <div class="text-blood mb-8 text-3xl font-light flex items-center justify-center"><i data-lucide="smartphone"></i></div>
                     <h3 class="font-cinematic text-xl text-white tracking-[0.1em] mb-4">Multi-Channel Alerts</h3>
                     <p class="text-sm font-light text-silver leading-relaxed mb-6">
                         Receive critical notifications via Email (SendGrid) and Telegram, ensuring you never miss a required check-in.
@@ -291,7 +291,7 @@
                 </div>
 
                 <div class="smoked-glass p-10">
-                    <div class="text-blood mb-8 text-3xl font-light">🔧</div>
+                    <div class="text-blood mb-8 text-3xl font-light flex items-center justify-center"><i data-lucide="wrench"></i></div>
                     <h3 class="font-cinematic text-xl text-white tracking-[0.1em] mb-4">Cross-Platform</h3>
                     <p class="text-sm font-light text-silver leading-relaxed mb-6">
                         Windows, Linux, macOS supported with identical security guarantees, featuring full Docker deployment readiness.
@@ -311,32 +311,32 @@
 
             <div class="grid grid-cols-2 md:grid-cols-3 gap-6">
                 <div class="smoked-glass p-8 text-center">
-                    <div class="text-3xl mb-4 text-blood">🔒</div>
+                    <div class="text-3xl mb-4 text-blood flex items-center justify-center"><i data-lucide="lock"></i></div>
                     <h4 class="font-cinematic text-white tracking-widest mb-2">Zero-Knowledge</h4>
                     <p class="text-xs text-silver font-light">Your secrets stay encrypted until delivery</p>
                 </div>
                 <div class="smoked-glass p-8 text-center">
-                    <div class="text-3xl mb-4 text-blood">🛡️</div>
+                    <div class="text-3xl mb-4 text-blood flex items-center justify-center"><i data-lucide="shield"></i></div>
                     <h4 class="font-cinematic text-white tracking-widest mb-2">API Auth</h4>
                     <p class="text-xs text-silver font-light">Secure API key authentication for all endpoints</p>
                 </div>
                 <div class="smoked-glass p-8 text-center">
-                    <div class="text-3xl mb-4 text-blood">⏱️</div>
+                    <div class="text-3xl mb-4 text-blood flex items-center justify-center"><i data-lucide="timer"></i></div>
                     <h4 class="font-cinematic text-white tracking-widest mb-2">Rate Limiting</h4>
                     <p class="text-xs text-silver font-light">Strict limits to prevent abuse and brute-forcing</p>
                 </div>
                 <div class="smoked-glass p-8 text-center">
-                    <div class="text-3xl mb-4 text-blood">🧹</div>
+                    <div class="text-3xl mb-4 text-blood flex items-center justify-center"><i data-lucide="broom"></i></div>
                     <h4 class="font-cinematic text-white tracking-widest mb-2">Memory Security</h4>
                     <p class="text-xs text-silver font-light">Secure deletion with memory barriers</p>
                 </div>
                 <div class="smoked-glass p-8 text-center">
-                    <div class="text-3xl mb-4 text-blood">✅</div>
+                    <div class="text-3xl mb-4 text-blood flex items-center justify-center"><i data-lucide="check-circle"></i></div>
                     <h4 class="font-cinematic text-white tracking-widest mb-2">Input Validation</h4>
                     <p class="text-xs text-silver font-light">Comprehensive payload sanitization</p>
                 </div>
                 <div class="smoked-glass p-8 text-center">
-                    <div class="text-3xl mb-4 text-blood">📋</div>
+                    <div class="text-3xl mb-4 text-blood flex items-center justify-center"><i data-lucide="clipboard-list"></i></div>
                     <h4 class="font-cinematic text-white tracking-widest mb-2">Security Headers</h4>
                     <p class="text-xs text-silver font-light">CSP, X-Frame-Options, and robust protections</p>
                 </div>

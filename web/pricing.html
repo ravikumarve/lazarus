@@ -5,17 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" type="image/svg+xml" href="/lazarus-logo.svg" />
     <title>Lazarus Protocol - Pricing</title>
+    <link rel="stylesheet" href="/css/base.css">
     <link rel="stylesheet" href="/css/pricing.css">
     <script src="https://unpkg.com/lucide@latest" defer></script>
 </head>
 <body>
-    <div class="theme-toggle" onclick="toggleTheme()" title="Toggle theme">
+    <button class="theme-toggle" title="Toggle theme" aria-label="Toggle theme">
         🌓
-    </div>
+    </button>
 
     <div class="app-container">
         <div class="header">
-            <h1>⚰️ Lazarus Protocol Pricing</h1>
+            <h1><i data-lucide="skull"></i> Lazarus Protocol Pricing</h1>
             <p>Choose the plan that fits your digital legacy protection needs</p>
             <div class="header-actions">
                 <a href="/" class="back-link">
@@ -33,36 +34,36 @@
                 
                 <div class="features-list">
                     <div class="feature-item">
-                        <span class="feature-icon">✓</span>
+                        <span class="feature-icon"><i data-lucide="check"></i></span>
                         <span class="feature-text">1 Wallet Protection</span>
                     </div>
                     <div class="feature-item">
-                        <span class="feature-icon">✓</span>
+                        <span class="feature-icon"><i data-lucide="check"></i></span>
                         <span class="feature-text">Basic Monitoring</span>
                     </div>
                     <div class="feature-item">
-                        <span class="feature-icon">✓</span>
+                        <span class="feature-icon"><i data-lucide="check"></i></span>
                         <span class="feature-text">Email Notifications</span>
                     </div>
                     <div class="feature-item">
-                        <span class="feature-icon">✓</span>
+                        <span class="feature-icon"><i data-lucide="check"></i></span>
                         <span class="feature-text">30-day Check-in Period</span>
                     </div>
                     <div class="feature-item feature-disabled">
-                        <span class="feature-icon">✗</span>
+                        <span class="feature-icon"><i data-lucide="x"></i></span>
                         <span class="feature-text">Unlimited Wallets</span>
                     </div>
                     <div class="feature-item feature-disabled">
-                        <span class="feature-icon">✗</span>
+                        <span class="feature-icon"><i data-lucide="x"></i></span>
                         <span class="feature-text">Priority Support</span>
                     </div>
                     <div class="feature-item feature-disabled">
-                        <span class="feature-icon">✗</span>
+                        <span class="feature-icon"><i data-lucide="x"></i></span>
                         <span class="feature-text">Custom Check-in Intervals</span>
                     </div>
                 </div>
 
-                <a href="#" class="gumroad-btn secondary" onclick="event.preventDefault(); window.location.href='/';">
+                <a href="/" class="gumroad-btn secondary">
                     Use Free Version
                 </a>
             </div>
@@ -75,31 +76,31 @@
                 
                 <div class="features-list">
                     <div class="feature-item">
-                        <span class="feature-icon">✓</span>
+                        <span class="feature-icon"><i data-lucide="check"></i></span>
                         <span class="feature-text">Unlimited Wallet Protection</span>
                     </div>
                     <div class="feature-item">
-                        <span class="feature-icon">✓</span>
+                        <span class="feature-icon"><i data-lucide="check"></i></span>
                         <span class="feature-text">Advanced Monitoring</span>
                     </div>
                     <div class="feature-item">
-                        <span class="feature-icon">✓</span>
+                        <span class="feature-icon"><i data-lucide="check"></i></span>
                         <span class="feature-text">SMS & Email Alerts</span>
                     </div>
                     <div class="feature-item">
-                        <span class="feature-icon">✓</span>
+                        <span class="feature-icon"><i data-lucide="check"></i></span>
                         <span class="feature-text">Custom Check-in Intervals</span>
                     </div>
                     <div class="feature-item">
-                        <span class="feature-icon">✓</span>
+                        <span class="feature-icon"><i data-lucide="check"></i></span>
                         <span class="feature-text">Priority Support</span>
                     </div>
                     <div class="feature-item">
-                        <span class="feature-icon">✓</span>
+                        <span class="feature-icon"><i data-lucide="check"></i></span>
                         <span class="feature-text">Multi-device Sync</span>
                     </div>
                     <div class="feature-item">
-                        <span class="feature-icon">✓</span>
+                        <span class="feature-icon"><i data-lucide="check"></i></span>
                         <span class="feature-text">Backup & Recovery Tools</span>
                     </div>
                 </div>
@@ -168,7 +169,7 @@
         </div>
 
         <div class="guarantee">
-            <h3>💎 30-Day Money-Back Guarantee</h3>
+            <h3><i data-lucide="gem"></i> 30-Day Money-Back Guarantee</h3>
             <p>Not satisfied with Lazarus Protocol Pro? Get a full refund within 30 days, no questions asked.</p>
         </div>
 
@@ -204,6 +205,10 @@
         // Add fade-in animation
         document.addEventListener('DOMContentLoaded', function() {
             document.querySelector('.app-container').classList.add('fade-in');
+
+            // Wire theme toggle
+            const themeToggle = document.querySelector('.theme-toggle');
+            if (themeToggle) themeToggle.addEventListener('click', toggleTheme);
         });
 
         // Gumroad integration

@@ -373,6 +373,7 @@ def pricing():
 
 # Static CSS files
 CSS_FILES = {
+    "base.css": "base.css",
     "dashboard.css": "dashboard.css",
     "pricing.css": "pricing.css",
     "login.css": "login.css",
