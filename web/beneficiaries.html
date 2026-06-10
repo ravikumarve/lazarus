@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/lazarus-logo.svg" />
+    <title>Lazarus Protocol — Beneficiaries</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;800&family=Inter:wght@300;400;500&family=JetBrains+Mono:wght@100..800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/base.css">
+    <link rel="stylesheet" href="/css/beneficiaries.css">
+    <script src="https://unpkg.com/lucide@latest" defer></script>
+</head>
+<body>
+    <div class="film-grain"></div>
+    <button class="theme-toggle" title="Toggle theme" aria-label="Toggle theme">🌓</button>
+
+    <div class="app-container">
+        <div class="header">
+            <h1><img src="/lazarus-logo.svg" class="header-logo" alt=""> Beneficiaries</h1>
+            <p>Manage who receives your digital legacy</p>
+            <div class="header-actions">
+                <button class="btn btn-sm btn-secondary" data-action="nav-dashboard"><i data-lucide="layout-dashboard"></i> Dashboard</button>
+                <button class="btn btn-sm btn-secondary" data-action="nav-settings"><i data-lucide="sliders"></i> Settings</button>
+                <button class="btn btn-sm btn-secondary" data-action="nav-wallets"><i data-lucide="wallet"></i> Wallets</button>
+                <button class="btn btn-sm btn-secondary" data-action="nav-activity"><i data-lucide="activity"></i> Activity</button>
+                <button class="btn btn-sm btn-secondary" data-action="nav-pricing"><i data-lucide="credit-card"></i> Pricing</button>
+            </div>
+        </div>
+
+        <div id="loading" class="loading" style="display: none;">
+            <div class="loading-spinner"></div>
+            <p>Loading beneficiaries...</p>
+        </div>
+
+        <div id="error" class="error" style="display: none;">
+            <p id="error-message">Failed to load beneficiaries.</p>
+        </div>
+
+        <div id="beneficiaries-content" style="display: none;">
+            <div class="card">
+                <h2><i data-lucide="users"></i> Your Beneficiary</h2>
+                <p class="status-label" style="margin-bottom: 16px;">The person who will receive your encrypted secrets if the protocol triggers.</p>
+                <div id="beneficiary-list"></div>
+                <div id="beneficiary-form" class="beneficiary-form" style="display: none;">
+                    <h3 style="font-family: var(--font-cinematic); font-size: 0.9rem; color: var(--blood); margin-bottom: 12px; letter-spacing: 0.1em;" id="form-title">Add Beneficiary</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="ben-name">Full Name</label>
+                            <input type="text" id="ben-name" maxlength="100" placeholder="e.g. Jane Doe">
+                        </div>
+                        <div class="form-group">
+                            <label for="ben-email">Email Address</label>
+                            <input type="email" id="ben-email" maxlength="200" placeholder="e.g. jane@example.com">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="ben-pubkey">Public Key Path (optional)</label>
+                        <input type="text" id="ben-pubkey" maxlength="500" placeholder="/path/to/public_key.pem">
+                    </div>
+                    <div class="modal-actions" style="padding-top: 8px;">
+                        <button class="btn btn-primary" id="save-beneficiary"><i data-lucide="check"></i> Save</button>
+                        <button class="btn btn-secondary" id="cancel-beneficiary"><i data-lucide="x"></i> Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+
+        function getStoredApiKey() {
+            return localStorage.getItem('lazarus-api-key') || '';
+        }
+
+        async function fetchWithAuth(url, options = {}) {
+            const headers = { 'Content-Type': 'application/json', ...options.headers };
+            const apiKey = getStoredApiKey();
+            if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
+            const response = await fetch(url, { ...options, headers });
+            if (response.status === 401) {
+                const key = prompt('API key required. Enter your Lazarus API key:');
+                if (key && key.length >= 16) {
+                    localStorage.setItem('lazarus-api-key', key);
+                    return fetchWithAuth(url, options);
+                }
+                window.location.href = '/';
+            }
+            return response;
+        }
+
+        let currentBeneficiary = null;
+
+        function showError(msg) {
+            document.getElementById('error').style.display = 'block';
+            document.getElementById('error-message').textContent = msg;
+            document.getElementById('beneficiaries-content').style.display = 'none';
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        function renderBeneficiary(ben) {
+            const container = document.getElementById('beneficiary-list');
+            if (!ben) {
+                container.innerHTML = '<div class="activity-empty"><i data-lucide="user-plus" style="display: block; margin: 0 auto 12px; width: 32px; height: 32px;"></i> No beneficiary configured.<br><button class="btn btn-sm btn-primary" id="add-first-ben" style="margin-top: 12px;"><i data-lucide="plus"></i> Add Beneficiary</button></div>';
+                document.getElementById('add-first-ben')?.addEventListener('click', () => showForm(null));
+                lucide.createIcons();
+                return;
+            }
+            container.innerHTML = `
+                <div class="beneficiary-card">
+                    <div class="beneficiary-header">
+                        <div>
+                            <div class="beneficiary-name"><i data-lucide="user" style="width: 16px; height: 16px; margin-right: 6px;"></i>${escapeHtml(ben.name)}</div>
+                            <div class="beneficiary-email"><i data-lucide="mail" style="width: 12px; height: 12px; margin-right: 4px;"></i>${escapeHtml(ben.email)}</div>
+                        </div>
+                        <div class="beneficiary-actions">
+                            <button class="btn btn-sm btn-secondary" onclick="showForm(${JSON.stringify(ben).replace(/"/g, "'")})"><i data-lucide="edit-2"></i> Edit</button>
+                        </div>
+                    </div>
+                    <div class="beneficiary-meta">
+                        <span class="badge"><i data-lucide="key" style="width: 10px; height: 10px; margin-right: 4px;"></i>${ben.public_key_path ? escapeHtml(ben.public_key_path) : 'No public key'}</span>
+                    </div>
+                </div>
+            `;
+            lucide.createIcons();
+        }
+
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        function showForm(ben) {
+            const form = document.getElementById('beneficiary-form');
+            form.style.display = 'block';
+            document.getElementById('form-title').textContent = ben ? 'Edit Beneficiary' : 'Add Beneficiary';
+            document.getElementById('ben-name').value = ben ? ben.name : '';
+            document.getElementById('ben-email').value = ben ? ben.email : '';
+            document.getElementById('ben-pubkey').value = ben ? (ben.public_key_path || '') : '';
+            currentBeneficiary = ben;
+        }
+
+        function hideForm() {
+            document.getElementById('beneficiary-form').style.display = 'none';
+            currentBeneficiary = null;
+        }
+
+        async function loadBeneficiaries() {
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('error').style.display = 'none';
+            document.getElementById('beneficiaries-content').style.display = 'none';
+            try {
+                const res = await fetchWithAuth(`${API_BASE}/api/beneficiaries`);
+                if (!res.ok) { showError(`Failed to load (${res.status})`); return; }
+                const data = await res.json();
+                const ben = data.beneficiaries && data.beneficiaries.length > 0 ? data.beneficiaries[0] : null;
+                renderBeneficiary(ben);
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('beneficiaries-content').style.display = 'block';
+            } catch (e) {
+                showError('Error: ' + e.message);
+            }
+        }
+
+        document.getElementById('save-beneficiary').addEventListener('click', async () => {
+            const name = document.getElementById('ben-name').value.trim();
+            const email = document.getElementById('ben-email').value.trim();
+            const pubkey = document.getElementById('ben-pubkey').value.trim();
+            if (!name || !email) { alert('Name and email are required.'); return; }
+            const btn = document.getElementById('save-beneficiary');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="pulse">⏳</span> Saving...';
+            try {
+                const res = await fetchWithAuth(`${API_BASE}/api/beneficiaries`, {
+                    method: 'PUT',
+                    body: JSON.stringify({ name, email, public_key_path: pubkey || null }),
+                });
+                const result = await res.json();
+                if (res.ok) {
+                    hideForm();
+                    await loadBeneficiaries();
+                } else {
+                    throw new Error(result.detail || 'Save failed');
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+            btn.disabled = false;
+            btn.innerHTML = '<i data-lucide="check"></i> Save';
+        });
+
+        document.getElementById('cancel-beneficiary').addEventListener('click', hideForm);
+
+        // Navigation
+        const navMap = {
+            'nav-dashboard': '/',
+            'nav-settings': '/settings',
+            'nav-wallets': '/wallets',
+            'nav-activity': '/activity',
+            'nav-pricing': '/pricing',
+        };
+        document.querySelectorAll('[data-action]').forEach(el => {
+            const action = el.dataset.action;
+            if (navMap[action]) el.addEventListener('click', () => { window.location.href = navMap[action]; });
+        });
+
+        document.addEventListener('DOMContentLoaded', () => { lucide.createIcons(); loadBeneficiaries(); });
+    </script>
+</body>
+</html>

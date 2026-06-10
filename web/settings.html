@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/lazarus-logo.svg" />
+    <title>Lazarus Protocol — Settings</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;800&family=Inter:wght@300;400;500&family=JetBrains+Mono:wght@100..800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/base.css">
+    <link rel="stylesheet" href="/css/settings.css">
+    <script src="https://unpkg.com/lucide@latest" defer></script>
+</head>
+<body>
+    <div class="film-grain"></div>
+    <button class="theme-toggle" title="Toggle theme" aria-label="Toggle theme">🌓</button>
+
+    <div class="app-container">
+        <div class="header">
+            <h1><img src="/lazarus-logo.svg" class="header-logo" alt=""> Settings</h1>
+            <p>Configure your Lazarus Protocol</p>
+            <div class="header-actions">
+                <button class="btn btn-sm btn-secondary" data-action="nav-dashboard"><i data-lucide="layout-dashboard"></i> Dashboard</button>
+                <button class="btn btn-sm btn-secondary" data-action="nav-beneficiaries"><i data-lucide="users"></i> Beneficiaries</button>
+                <button class="btn btn-sm btn-secondary" data-action="nav-wallets"><i data-lucide="wallet"></i> Wallets</button>
+                <button class="btn btn-sm btn-secondary" data-action="nav-activity"><i data-lucide="activity"></i> Activity</button>
+                <button class="btn btn-sm btn-secondary" data-action="nav-pricing"><i data-lucide="credit-card"></i> Pricing</button>
+            </div>
+        </div>
+
+        <div id="loading" class="loading" style="display: none;">
+            <div class="loading-spinner"></div>
+            <p>Loading settings...</p>
+        </div>
+
+        <div id="error" class="error" style="display: none;">
+            <p id="error-message">Failed to load settings.</p>
+        </div>
+
+        <div id="settings-content" style="display: none;">
+            <div class="card">
+                <h2><i data-lucide="sliders"></i> Protocol Configuration</h2>
+                <div class="settings-grid">
+                    <div class="setting-row">
+                        <div class="setting-label">
+                            <span>Owner Name</span>
+                            <small>Your display name</small>
+                        </div>
+                        <div class="setting-input">
+                            <input type="text" id="owner-name" maxlength="100">
+                        </div>
+                    </div>
+                    <div class="setting-row">
+                        <div class="setting-label">
+                            <span>Owner Email</span>
+                            <small>Contact email for notifications</small>
+                        </div>
+                        <div class="setting-input">
+                            <input type="email" id="owner-email" maxlength="200">
+                        </div>
+                    </div>
+                    <div class="setting-row">
+                        <div class="setting-label">
+                            <span>Check-in Interval</span>
+                            <small>Days between required check-ins</small>
+                        </div>
+                        <div class="setting-input">
+                            <select id="checkin-interval">
+                                <option value="7">7 days</option>
+                                <option value="14">14 days</option>
+                                <option value="30" selected>30 days</option>
+                                <option value="60">60 days</option>
+                                <option value="90">90 days</option>
+                                <option value="180">180 days</option>
+                                <option value="365">365 days</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="setting-row">
+                        <div class="setting-label">
+                            <span>Telegram Chat ID</span>
+                            <small>Notifications via Telegram bot</small>
+                        </div>
+                        <div class="setting-input">
+                            <input type="text" id="telegram-chat" maxlength="100" placeholder="Optional">
+                        </div>
+                    </div>
+                    <div class="setting-row">
+                        <div class="setting-label">
+                            <span>Armed</span>
+                            <small>Protocol will trigger when check-in is missed</small>
+                        </div>
+                        <div class="setting-input" style="display: flex; justify-content: flex-end;">
+                            <label class="toggle">
+                                <input type="checkbox" id="armed-toggle">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div class="settings-actions">
+                    <button class="btn btn-primary" id="save-settings"><i data-lucide="save"></i> Save Settings</button>
+                    <button class="btn btn-secondary" id="reset-settings"><i data-lucide="rotate-ccw"></i> Reset</button>
+                </div>
+            </div>
+
+            <div class="card" style="margin-top: 16px;">
+                <h2><i data-lucide="info"></i> Subscription Info</h2>
+                <div class="settings-grid">
+                    <div class="setting-row">
+                        <div class="setting-label">
+                            <span>Tier</span>
+                        </div>
+                        <div class="setting-value" id="sub-tier">—</div>
+                    </div>
+                    <div class="setting-row">
+                        <div class="setting-label">
+                            <span>Wallet Limit</span>
+                        </div>
+                        <div class="setting-value" id="wallet-limit">—</div>
+                    </div>
+                    <div class="setting-row">
+                        <div class="setting-label">
+                            <span>License Key</span>
+                        </div>
+                        <div class="setting-value" id="license-key" style="font-family: var(--font-mono); font-size: 0.78rem; color: var(--text-muted);">—</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+
+        function getStoredApiKey() {
+            return localStorage.getItem('lazarus-api-key') || '';
+        }
+
+        async function fetchWithAuth(url, options = {}) {
+            const headers = { 'Content-Type': 'application/json', ...options.headers };
+            const apiKey = getStoredApiKey();
+            if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
+            const response = await fetch(url, { ...options, headers });
+            if (response.status === 401) {
+                const key = prompt('API key required. Enter your Lazarus API key:');
+                if (key && key.length >= 16) {
+                    localStorage.setItem('lazarus-api-key', key);
+                    return fetchWithAuth(url, options);
+                }
+                window.location.href = '/';
+            }
+            return response;
+        }
+
+        function showError(msg) {
+            document.getElementById('error').style.display = 'block';
+            document.getElementById('error-message').textContent = msg;
+            document.getElementById('settings-content').style.display = 'none';
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        async function loadSettings() {
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('error').style.display = 'none';
+            document.getElementById('settings-content').style.display = 'none';
+            try {
+                const res = await fetchWithAuth(`${API_BASE}/api/settings`);
+                if (!res.ok) { showError(`Failed to load settings (${res.status})`); return; }
+                const data = await res.json();
+                document.getElementById('owner-name').value = data.owner_name || '';
+                document.getElementById('owner-email').value = data.owner_email || '';
+                document.getElementById('checkin-interval').value = data.checkin_interval_days || 30;
+                document.getElementById('telegram-chat').value = data.telegram_chat_id || '';
+                document.getElementById('armed-toggle').checked = data.armed !== false;
+                document.getElementById('sub-tier').textContent = data.subscription_tier || 'free';
+                document.getElementById('wallet-limit').textContent = data.wallet_limit || 1;
+                document.getElementById('license-key').textContent = data.license_key || 'None';
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('settings-content').style.display = 'block';
+            } catch (e) {
+                showError('Error loading settings: ' + e.message);
+            }
+        }
+
+        document.getElementById('save-settings').addEventListener('click', async () => {
+            const btn = document.getElementById('save-settings');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="pulse">⏳</span> Saving...';
+            try {
+                const body = {
+                    owner_name: document.getElementById('owner-name').value.trim(),
+                    owner_email: document.getElementById('owner-email').value.trim(),
+                    checkin_interval_days: parseInt(document.getElementById('checkin-interval').value),
+                    telegram_chat_id: document.getElementById('telegram-chat').value.trim() || null,
+                    armed: document.getElementById('armed-toggle').checked,
+                };
+                const res = await fetchWithAuth(`${API_BASE}/api/settings`, {
+                    method: 'PUT',
+                    body: JSON.stringify(body),
+                });
+                const result = await res.json();
+                if (res.ok) {
+                    btn.innerHTML = '<i data-lucide="check"></i> Saved';
+                    setTimeout(() => { btn.innerHTML = '<i data-lucide="save"></i> Save Settings'; btn.disabled = false; }, 2000);
+                } else {
+                    throw new Error(result.detail || 'Save failed');
+                }
+            } catch (e) {
+                btn.innerHTML = '<i data-lucide="save"></i> Save Settings';
+                btn.disabled = false;
+                alert('Error: ' + e.message);
+            }
+        });
+
+        document.getElementById('reset-settings').addEventListener('click', loadSettings);
+
+        // Navigation
+        const navMap = {
+            'nav-dashboard': '/',
+            'nav-beneficiaries': '/beneficiaries',
+            'nav-wallets': '/wallets',
+            'nav-activity': '/activity',
+            'nav-pricing': '/pricing',
+        };
+        document.querySelectorAll('[data-action]').forEach(el => {
+            const action = el.dataset.action;
+            if (navMap[action]) {
+                el.addEventListener('click', () => { window.location.href = navMap[action]; });
+            }
+        });
+
+        document.addEventListener('DOMContentLoaded', () => { lucide.createIcons(); loadSettings(); });
+    </script>
+</body>
+</html>

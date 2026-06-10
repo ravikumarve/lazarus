@@ -369,12 +369,44 @@ def pricing():
     return FileResponse(html_path, media_type="text/html")
 
 
+@app.get("/settings")
+def settings_page():
+    """Serve the settings HTML page."""
+    html_path = Path(__file__).parent / "settings.html"
+    return FileResponse(html_path, media_type="text/html")
+
+
+@app.get("/beneficiaries")
+def beneficiaries_page():
+    """Serve the beneficiaries HTML page."""
+    html_path = Path(__file__).parent / "beneficiaries.html"
+    return FileResponse(html_path, media_type="text/html")
+
+
+@app.get("/wallets")
+def wallets_page():
+    """Serve the wallets HTML page."""
+    html_path = Path(__file__).parent / "wallets.html"
+    return FileResponse(html_path, media_type="text/html")
+
+
+@app.get("/activity")
+def activity_page():
+    """Serve the activity log HTML page."""
+    html_path = Path(__file__).parent / "activity.html"
+    return FileResponse(html_path, media_type="text/html")
+
+
 # Static CSS files
 CSS_FILES = {
     "base.css": "base.css",
     "dashboard.css": "dashboard.css",
     "pricing.css": "pricing.css",
     "login.css": "login.css",
+    "settings.css": "settings.css",
+    "beneficiaries.css": "beneficiaries.css",
+    "wallets.css": "wallets.css",
+    "activity.css": "activity.css",
 }
 
 
@@ -634,6 +666,29 @@ class SessionKeyResponse(BaseModel):
     expires_at: str = Field(..., description="Key expiration timestamp (ISO 8601)")
 
 
+class SettingsUpdate(BaseModel):
+    """Request model for updating settings"""
+    owner_name: str | None = Field(None, max_length=100)
+    owner_email: str | None = Field(None, max_length=200)
+    checkin_interval_days: int | None = Field(None, ge=1, le=365)
+    telegram_chat_id: str | None = Field(None, max_length=100)
+    armed: bool | None = None
+
+
+class BeneficiaryUpdate(BaseModel):
+    """Request model for updating beneficiary"""
+    name: str = Field(..., max_length=100, description="Beneficiary name")
+    email: str = Field(..., max_length=200, description="Beneficiary email")
+    public_key_path: str | None = Field(None, max_length=500, description="Path to RSA public key PEM")
+
+
+class WalletCreate(BaseModel):
+    """Request model for creating/importing a wallet"""
+    label: str = Field(..., max_length=100, description="Human-readable label")
+    description: str | None = Field(None, max_length=500)
+    private_key: str | None = Field(None, max_length=200, description="Import from private key (hex)")
+
+
 class KeyRotationRequest(BaseModel):
     """Request model for key rotation"""
     key_id: str = Field(..., description="Key ID to rotate")
@@ -780,6 +835,244 @@ async def validate_session_key(
             "ip_address": session_key.ip_address
         }
     }
+
+
+# ---------------------------------------------------------------------------
+# Settings API
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/settings")
+async def get_settings(request: Request):
+    """Get current protocol settings. Requires authentication."""
+    credentials = await security(request)
+    verify_api_key(credentials)
+    try:
+        config = load_config()
+        return {
+            "owner_name": config.owner_name,
+            "owner_email": config.owner_email,
+            "checkin_interval_days": config.checkin_interval_days,
+            "telegram_chat_id": config.telegram_chat_id or "",
+            "armed": config.armed,
+            "subscription_tier": config.subscription_tier,
+            "wallet_limit": config.wallet_limit,
+            "license_key": config.license_key or "",
+        }
+    except FileNotFoundError:
+        raise HTTPException(status_code=400, detail="Lazarus not initialized")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/settings")
+async def update_settings(request: Request, settings: SettingsUpdate):
+    """Update protocol settings. Requires authentication."""
+    credentials = await security(request)
+    verify_api_key(credentials)
+    try:
+        config = load_config()
+        dirty = False
+        if settings.owner_name is not None:
+            config.owner_name = sanitize_input(settings.owner_name, 100)
+            dirty = True
+        if settings.owner_email is not None:
+            config.owner_email = sanitize_input(settings.owner_email, 200)
+            dirty = True
+        if settings.checkin_interval_days is not None:
+            config.checkin_interval_days = settings.checkin_interval_days
+            dirty = True
+        if settings.telegram_chat_id is not None:
+            config.telegram_chat_id = sanitize_input(settings.telegram_chat_id, 100) or None
+            dirty = True
+        if settings.armed is not None:
+            config.armed = settings.armed
+            dirty = True
+        if dirty:
+            save_config(config)
+            LAZARUS_DIR.mkdir(parents=True, exist_ok=True)
+            with open(EVENTS_LOG, "a") as f:
+                f.write(f"[{datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S UTC')}] SETTINGS: Updated by {config.owner_name}.\n")
+        return {"success": True, "message": "Settings updated"}
+    except FileNotFoundError:
+        raise HTTPException(status_code=400, detail="Lazarus not initialized")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ---------------------------------------------------------------------------
+# Beneficiaries API
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/beneficiaries")
+async def get_beneficiaries(request: Request):
+    """Get list of beneficiaries. Requires authentication."""
+    credentials = await security(request)
+    verify_api_key(credentials)
+    try:
+        config = load_config()
+        return {
+            "beneficiaries": [
+                {
+                    "id": 1,
+                    "name": config.beneficiary.name,
+                    "email": config.beneficiary.email,
+                    "public_key_path": config.beneficiary.public_key_path,
+                }
+            ]
+        }
+    except FileNotFoundError:
+        return {"beneficiaries": []}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/beneficiaries")
+async def update_beneficiary(request: Request, ben: BeneficiaryUpdate):
+    """Update the primary beneficiary. Requires authentication."""
+    credentials = await security(request)
+    verify_api_key(credentials)
+    try:
+        config = load_config()
+        from dataclasses import replace
+        from core.config import BeneficiaryConfig
+        config.beneficiary = BeneficiaryConfig(
+            name=sanitize_input(ben.name, 100),
+            email=sanitize_input(ben.email, 200),
+            public_key_path=ben.public_key_path or config.beneficiary.public_key_path,
+        )
+        save_config(config)
+        LAZARUS_DIR.mkdir(parents=True, exist_ok=True)
+        with open(EVENTS_LOG, "a") as f:
+            f.write(f"[{datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S UTC')}] BENEFICIARY: Updated by {config.owner_name}.\n")
+        return {"success": True, "message": "Beneficiary updated"}
+    except FileNotFoundError:
+        raise HTTPException(status_code=400, detail="Lazarus not initialized")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ---------------------------------------------------------------------------
+# Wallets API
+# ---------------------------------------------------------------------------
+
+
+def _get_blockchain_manager():
+    """Get or create blockchain manager instance."""
+    from core.blockchain import BlockchainManager
+    return BlockchainManager()
+
+
+@app.get("/api/wallets")
+async def list_wallets(request: Request):
+    """List all crypto wallets. Requires authentication."""
+    credentials = await security(request)
+    verify_api_key(credentials)
+    try:
+        bm = _get_blockchain_manager()
+        wallets = []
+        for w in bm.list_wallets():
+            wallets.append({
+                "address": w.address,
+                "network": w.network,
+                "wallet_type": w.wallet_type.value if hasattr(w.wallet_type, 'value') else str(w.wallet_type),
+                "label": w.label,
+                "description": w.description,
+                "balance": str(w.balance) if w.balance else "0",
+                "last_sync": w.last_sync.isoformat() if w.last_sync else None,
+            })
+        return {"wallets": wallets}
+    except ImportError:
+        return {"wallets": [], "message": "Web3 library not available"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/wallets")
+async def create_wallet(request: Request, wallet_data: WalletCreate):
+    """Create or import a wallet. Requires authentication."""
+    credentials = await security(request)
+    verify_api_key(credentials)
+    try:
+        bm = _get_blockchain_manager()
+        label = sanitize_input(wallet_data.label, 100)
+        description = sanitize_input(wallet_data.description or "", 500)
+        if wallet_data.private_key:
+            w = bm.import_wallet(wallet_data.private_key, label, description)
+        else:
+            w = bm.create_wallet(label, description)
+        LAZARUS_DIR.mkdir(parents=True, exist_ok=True)
+        with open(EVENTS_LOG, "a") as f:
+            f.write(f"[{datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S UTC')}] WALLET: {'Imported' if wallet_data.private_key else 'Created'} {w.label} ({w.address[:10]}...).\n")
+        return {
+            "success": True,
+            "wallet": {
+                "address": w.address,
+                "label": w.label,
+                "network": w.network,
+                "wallet_type": w.wallet_type.value if hasattr(w.wallet_type, 'value') else str(w.wallet_type),
+            }
+        }
+    except ImportError:
+        raise HTTPException(status_code=400, detail="Web3 library not available — cannot manage wallets")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/wallets/{address}")
+async def delete_wallet(request: Request, address: str):
+    """Delete a wallet. Requires authentication."""
+    credentials = await security(request)
+    verify_api_key(credentials)
+    try:
+        bm = _get_blockchain_manager()
+        from core.blockchain import WalletConfig
+        # Find and remove wallet by address
+        for w in bm.list_wallets():
+            if w.address == address:
+                bm._wallets.pop(address, None)
+                LAZARUS_DIR.mkdir(parents=True, exist_ok=True)
+                with open(EVENTS_LOG, "a") as f:
+                    f.write(f"[{datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S UTC')}] WALLET: Removed {w.label} ({address[:10]}...).\n")
+                return {"success": True, "message": f"Wallet {w.label} removed"}
+        raise HTTPException(status_code=404, detail="Wallet not found")
+    except ImportError:
+        raise HTTPException(status_code=400, detail="Web3 library not available")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/wallets/balances")
+async def wallet_balances(request: Request):
+    """Get balances for all wallets. Requires authentication."""
+    credentials = await security(request)
+    verify_api_key(credentials)
+    try:
+        bm = _get_blockchain_manager()
+        balances = []
+        for w in bm.list_wallets():
+            try:
+                bal = bm.get_balance(w.address)
+            except Exception:
+                bal = None
+            balances.append({
+                "address": w.address,
+                "label": w.label,
+                "balance": str(bal) if bal else "unknown",
+            })
+        return {"balances": balances}
+    except ImportError:
+        return {"balances": [], "message": "Web3 library not available"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ---------------------------------------------------------------------------
+# Settings helper — update_config uses lazarus_dir / export logic
+# ---------------------------------------------------------------------------
 
 
 @app.get("/{full_path:path}")

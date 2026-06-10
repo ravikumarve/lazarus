@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/lazarus-logo.svg" />
+    <title>Lazarus Protocol — Wallets</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;800&family=Inter:wght@300;400;500&family=JetBrains+Mono:wght@100..800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/base.css">
+    <link rel="stylesheet" href="/css/wallets.css">
+    <link rel="stylesheet" href="/css/dashboard.css">
+    <script src="https://unpkg.com/lucide@latest" defer></script>
+</head>
+<body>
+    <div class="film-grain"></div>
+    <button class="theme-toggle" title="Toggle theme" aria-label="Toggle theme">🌓</button>
+
+    <div class="app-container">
+        <div class="header">
+            <h1><img src="/lazarus-logo.svg" class="header-logo" alt=""> Wallets &amp; Vault</h1>
+            <p>Manage crypto wallets and bundle documents</p>
+            <div class="header-actions">
+                <button class="btn btn-sm btn-secondary" data-action="nav-dashboard"><i data-lucide="layout-dashboard"></i> Dashboard</button>
+                <button class="btn btn-sm btn-secondary" data-action="nav-settings"><i data-lucide="sliders"></i> Settings</button>
+                <button class="btn btn-sm btn-secondary" data-action="nav-beneficiaries"><i data-lucide="users"></i> Beneficiaries</button>
+                <button class="btn btn-sm btn-secondary" data-action="nav-activity"><i data-lucide="activity"></i> Activity</button>
+                <button class="btn btn-sm btn-secondary" data-action="nav-pricing"><i data-lucide="credit-card"></i> Pricing</button>
+            </div>
+        </div>
+
+        <div id="loading" class="loading" style="display: none;">
+            <div class="loading-spinner"></div>
+            <p>Loading wallets...</p>
+        </div>
+
+        <div id="error" class="error" style="display: none;">
+            <p id="error-message">Failed to load wallets.</p>
+        </div>
+
+        <div id="wallets-content" style="display: none;">
+            <div class="card">
+                <h2><i data-lucide="wallet"></i> Crypto Wallets</h2>
+                <div class="wallet-stats" id="wallet-stats"></div>
+
+                <div class="wallet-tabs">
+                    <button class="wallet-tab active" data-tab="create">Create</button>
+                    <button class="wallet-tab" data-tab="import">Import</button>
+                </div>
+
+                <div id="wallet-create-form" class="wallet-form-panel active">
+                    <div class="form-group">
+                        <label for="wallet-label">Wallet Label</label>
+                        <input type="text" id="wallet-label" maxlength="100" placeholder="e.g. Main Savings">
+                    </div>
+                    <div class="form-group">
+                        <label for="wallet-desc">Description (optional)</label>
+                        <input type="text" id="wallet-desc" maxlength="500" placeholder="My primary Ethereum wallet">
+                    </div>
+                    <button class="btn btn-primary" id="create-wallet"><i data-lucide="plus"></i> Create Wallet</button>
+                </div>
+
+                <div id="wallet-import-form" class="wallet-form-panel">
+                    <div class="form-group">
+                        <label for="import-label">Wallet Label</label>
+                        <input type="text" id="import-label" maxlength="100" placeholder="e.g. Cold Storage">
+                    </div>
+                    <div class="form-group">
+                        <label for="import-key">Private Key (hex)</label>
+                        <input type="password" id="import-key" maxlength="200" placeholder="0x... or hex key">
+                    </div>
+                    <button class="btn btn-primary" id="import-wallet"><i data-lucide="download"></i> Import Wallet</button>
+                </div>
+            </div>
+
+            <div class="card" style="margin-top: 16px;">
+                <h2><i data-lucide="list"></i> Wallet List</h2>
+                <div id="wallet-list" class="grid" style="grid-template-columns: 1fr; gap: 8px; margin-top: 12px;"></div>
+            </div>
+
+            <div class="card" style="margin-top: 16px;">
+                <h2><i data-lucide="archive"></i> Vault Documents</h2>
+                <div id="bundle-documents" style="margin-top: 12px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+
+        function getStoredApiKey() {
+            return localStorage.getItem('lazarus-api-key') || '';
+        }
+
+        async function fetchWithAuth(url, options = {}) {
+            const headers = { 'Content-Type': 'application/json', ...options.headers };
+            const apiKey = getStoredApiKey();
+            if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
+            const response = await fetch(url, { ...options, headers });
+            if (response.status === 401) {
+                const key = prompt('API key required. Enter your Lazarus API key:');
+                if (key && key.length >= 16) {
+                    localStorage.setItem('lazarus-api-key', key);
+                    return fetchWithAuth(url, options);
+                }
+                window.location.href = '/';
+            }
+            return response;
+        }
+
+        function showError(msg) {
+            document.getElementById('error').style.display = 'block';
+            document.getElementById('error-message').textContent = msg;
+            document.getElementById('wallets-content').style.display = 'none';
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        function truncateAddr(addr) {
+            if (!addr || addr.length < 14) return addr || '—';
+            return addr.slice(0, 6) + '...' + addr.slice(-4);
+        }
+
+        async function loadWallets() {
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('loading').innerHTML = '<div class="loading-spinner"></div><p>Loading wallets...</p>';
+            document.getElementById('error').style.display = 'none';
+            document.getElementById('wallets-content').style.display = 'none';
+            try {
+                const [walletRes, bundleRes] = await Promise.all([
+                    fetchWithAuth(`${API_BASE}/api/wallets`),
+                    fetchWithAuth(`${API_BASE}/bundle`).catch(() => null),
+                ]);
+                const walletData = walletRes.ok ? await walletRes.json() : { wallets: [] };
+                const bundleData = bundleRes && bundleRes.ok ? await bundleRes.json() : { manifest: [] };
+
+                const wallets = walletData.wallets || [];
+                const manifest = bundleData.manifest || [];
+
+                // Stats
+                const statsEl = document.getElementById('wallet-stats');
+                const totalBal = wallets.reduce((sum, w) => sum + parseFloat(w.balance || 0), 0);
+                statsEl.innerHTML = `
+                    <div class="wallet-stat"><div class="wallet-stat-value">${wallets.length}</div><div class="wallet-stat-label">Wallets</div></div>
+                    <div class="wallet-stat"><div class="wallet-stat-value">${totalBal.toFixed(4)}</div><div class="wallet-stat-label">Total ETH</div></div>
+                    <div class="wallet-stat"><div class="wallet-stat-value">${manifest.length}</div><div class="wallet-stat-label">Documents</div></div>
+                `;
+
+                // Wallet list
+                const listEl = document.getElementById('wallet-list');
+                if (wallets.length === 0) {
+                    listEl.innerHTML = '<div class="activity-empty"><i data-lucide="wallet" style="display: block; margin: 0 auto 12px; width: 32px; height: 32px;"></i>No wallets yet. Create or import one above.</div>';
+                } else {
+                    listEl.innerHTML = wallets.map(w => `
+                        <div class="wallet-card">
+                            <div class="wallet-card-header">
+                                <div>
+                                    <div class="wallet-label">${escapeHtml(w.label)}</div>
+                                    <div class="wallet-address" title="${escapeHtml(w.address)}">${truncateAddr(w.address)}</div>
+                                </div>
+                                <div style="text-align: right;">
+                                    <div class="wallet-balance">${parseFloat(w.balance || 0).toFixed(4)}</div>
+                                    <div class="wallet-balance-label">ETH</div>
+                                </div>
+                            </div>
+                            <div class="wallet-meta">
+                                <span class="badge">${escapeHtml(w.network || 'ethereum')}</span>
+                                <span class="badge">${escapeHtml(w.wallet_type || 'software')}</span>
+                            </div>
+                            <div class="wallet-card-actions">
+                                <button class="btn btn-sm btn-danger" onclick="deleteWallet('${escapeHtml(w.address)}')"><i data-lucide="trash-2"></i> Remove</button>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+
+                // Bundle documents
+                const bundleEl = document.getElementById('bundle-documents');
+                if (manifest.length === 0) {
+                    bundleEl.innerHTML = '<div class="activity-empty"><i data-lucide="file" style="display: block; margin: 0 auto 12px; width: 32px; height: 32px;"></i>No documents in vault bundle.</div>';
+                } else {
+                    bundleEl.innerHTML = manifest.map(d => `
+                        <div class="event-item" style="border-left-color: #06b6d4;">
+                            <div class="event-time">${escapeHtml(d.type || 'document')}</div>
+                            <div class="event-content">${escapeHtml(d.filename)} <span style="color: var(--text-muted); font-size: 0.75rem;">(${d.size || 0} bytes)</span></div>
+                        </div>
+                    `).join('');
+                }
+
+                lucide.createIcons();
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('wallets-content').style.display = 'block';
+            } catch (e) {
+                showError('Error: ' + e.message);
+            }
+        }
+
+        async function deleteWallet(address) {
+            if (!confirm('Remove this wallet?')) return;
+            try {
+                const res = await fetchWithAuth(`${API_BASE}/api/wallets/${encodeURIComponent(address)}`, { method: 'DELETE' });
+                if (res.ok) await loadWallets();
+                else { const d = await res.json(); alert(d.detail || 'Delete failed'); }
+            } catch (e) { alert('Error: ' + e.message); }
+        }
+
+        // Tab switching
+        document.querySelectorAll('.wallet-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.wallet-tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.wallet-form-panel').forEach(p => p.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById('wallet-' + tab.dataset.tab + '-form').classList.add('active');
+            });
+        });
+
+        document.getElementById('create-wallet').addEventListener('click', async () => {
+            const label = document.getElementById('wallet-label').value.trim();
+            if (!label) { alert('Label is required.'); return; }
+            const btn = document.getElementById('create-wallet');
+            btn.disabled = true; btn.innerHTML = '<span class="pulse">⏳</span> Creating...';
+            try {
+                const res = await fetchWithAuth(`${API_BASE}/api/wallets`, {
+                    method: 'POST',
+                    body: JSON.stringify({ label, description: document.getElementById('wallet-desc').value.trim() }),
+                });
+                if (res.ok) {
+                    document.getElementById('wallet-label').value = '';
+                    document.getElementById('wallet-desc').value = '';
+                    await loadWallets();
+                } else { const d = await res.json(); alert(d.detail || 'Create failed'); }
+            } catch (e) { alert('Error: ' + e.message); }
+            btn.disabled = false; btn.innerHTML = '<i data-lucide="plus"></i> Create Wallet';
+        });
+
+        document.getElementById('import-wallet').addEventListener('click', async () => {
+            const label = document.getElementById('import-label').value.trim();
+            const key = document.getElementById('import-key').value.trim();
+            if (!label || !key) { alert('Label and private key are required.'); return; }
+            const btn = document.getElementById('import-wallet');
+            btn.disabled = true; btn.innerHTML = '<span class="pulse">⏳</span> Importing...';
+            try {
+                const res = await fetchWithAuth(`${API_BASE}/api/wallets`, {
+                    method: 'POST',
+                    body: JSON.stringify({ label, private_key: key }),
+                });
+                if (res.ok) {
+                    document.getElementById('import-label').value = '';
+                    document.getElementById('import-key').value = '';
+                    await loadWallets();
+                } else { const d = await res.json(); alert(d.detail || 'Import failed'); }
+            } catch (e) { alert('Error: ' + e.message); }
+            btn.disabled = false; btn.innerHTML = '<i data-lucide="download"></i> Import Wallet';
+        });
+
+        const navMap = {
+            'nav-dashboard': '/',
+            'nav-settings': '/settings',
+            'nav-beneficiaries': '/beneficiaries',
+            'nav-activity': '/activity',
+            'nav-pricing': '/pricing',
+        };
+        document.querySelectorAll('[data-action]').forEach(el => {
+            const action = el.dataset.action;
+            if (navMap[action]) el.addEventListener('click', () => { window.location.href = navMap[action]; });
+        });
+
+        document.addEventListener('DOMContentLoaded', () => { lucide.createIcons(); loadWallets(); });
+    </script>
+</body>
+</html>

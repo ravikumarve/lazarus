@@ -1,0 +1,89 @@
+/* ============================================================
+   Lazarus Protocol — Beneficiaries Page Styles
+   ============================================================ */
+
+.beneficiary-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 16px;
+    transition: var(--transition);
+}
+
+.beneficiary-card:hover {
+    border-color: rgba(139, 0, 0, 0.3);
+}
+
+.beneficiary-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 12px;
+}
+
+.beneficiary-name {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-color);
+    font-family: var(--font-cinematic);
+    letter-spacing: 0.05em;
+}
+
+.beneficiary-email {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+.beneficiary-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.beneficiary-meta .badge {
+    font-size: 0.65rem;
+    padding: 3px 8px;
+    border-radius: 0;
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border: 1px solid var(--border-color);
+    background: var(--surface-bg);
+    color: var(--text-muted);
+}
+
+.beneficiary-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.beneficiary-form {
+    margin-top: 16px;
+}
+
+.beneficiary-form .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+@media (max-width: 768px) {
+    .beneficiary-form .form-row {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 480px) {
+    .beneficiary-header {
+        flex-direction: column;
+        gap: 10px;
+    }
+    .beneficiary-actions {
+        width: 100%;
+    }
+    .beneficiary-actions .btn {
+        flex: 1;
+    }
+}

@@ -41,6 +41,10 @@
             <p>Monitor and manage your digital legacy protocol</p>
             <div class="header-actions">
                 <button class="btn btn-sm btn-secondary" data-action="refresh-status" title="Refresh status"><i data-lucide="refresh-cw"></i> Refresh</button>
+                <button class="btn btn-sm btn-secondary" data-action="nav-settings" title="Protocol settings"><i data-lucide="sliders"></i> Settings</button>
+                <button class="btn btn-sm btn-secondary" data-action="nav-beneficiaries" title="Manage beneficiaries"><i data-lucide="users"></i> Beneficiaries</button>
+                <button class="btn btn-sm btn-secondary" data-action="nav-wallets" title="Crypto wallets"><i data-lucide="wallet"></i> Wallets</button>
+                <button class="btn btn-sm btn-secondary" data-action="nav-activity" title="Activity log"><i data-lucide="activity"></i> Activity</button>
                 <button class="btn btn-sm btn-secondary" data-action="show-api-docs" title="View API documentation"><i data-lucide="book-open"></i> API Docs</button>
                 <button class="btn btn-sm btn-secondary" data-action="go-pricing" title="View pricing plans"><i data-lucide="credit-card"></i> Pricing</button>
                 <button class="btn btn-sm btn-secondary" data-action="logout" title="Logout"><i data-lucide="log-out"></i> Logout</button>
@@ -806,6 +810,10 @@
             const actions = {
                 'refresh-status': loadStatus,
                 'show-api-docs': showApiDocsModal,
+                'nav-settings': () => { window.location.href = '/settings'; },
+                'nav-beneficiaries': () => { window.location.href = '/beneficiaries'; },
+                'nav-wallets': () => { window.location.href = '/wallets'; },
+                'nav-activity': () => { window.location.href = '/activity'; },
                 'go-pricing': () => { window.location.href = '/pricing'; },
                 'logout': logout,
                 'ping': handlePing,

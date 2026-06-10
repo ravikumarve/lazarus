@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/lazarus-logo.svg" />
+    <title>Lazarus Protocol — Activity Log</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;800&family=Inter:wght@300;400;500&family=JetBrains+Mono:wght@100..800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/base.css">
+    <link rel="stylesheet" href="/css/activity.css">
+    <script src="https://unpkg.com/lucide@latest" defer></script>
+</head>
+<body>
+    <div class="film-grain"></div>
+    <button class="theme-toggle" title="Toggle theme" aria-label="Toggle theme">🌓</button>
+
+    <div class="app-container">
+        <div class="header">
+            <h1><img src="/lazarus-logo.svg" class="header-logo" alt=""> Activity Log</h1>
+            <p>Full event history for your Lazarus Protocol</p>
+            <div class="header-actions">
+                <button class="btn btn-sm btn-secondary" data-action="nav-dashboard"><i data-lucide="layout-dashboard"></i> Dashboard</button>
+                <button class="btn btn-sm btn-secondary" data-action="nav-settings"><i data-lucide="sliders"></i> Settings</button>
+                <button class="btn btn-sm btn-secondary" data-action="nav-beneficiaries"><i data-lucide="users"></i> Beneficiaries</button>
+                <button class="btn btn-sm btn-secondary" data-action="nav-wallets"><i data-lucide="wallet"></i> Wallets</button>
+                <button class="btn btn-sm btn-secondary" data-action="nav-pricing"><i data-lucide="credit-card"></i> Pricing</button>
+            </div>
+        </div>
+
+        <div id="loading" class="loading" style="display: none;">
+            <div class="loading-spinner"></div>
+            <p>Loading activity log...</p>
+        </div>
+
+        <div id="error" class="error" style="display: none;">
+            <p id="error-message">Failed to load activity log.</p>
+        </div>
+
+        <div id="activity-content" style="display: none;">
+            <div class="card">
+                <h2><i data-lucide="activity"></i> Event History</h2>
+                <div class="activity-filters">
+                    <input type="text" id="search-input" placeholder="Search events..." />
+                    <select id="type-filter">
+                        <option value="all">All Types</option>
+                        <option value="CHECKIN">Check-ins</option>
+                        <option value="FREEZE">Freeze</option>
+                        <option value="SETTINGS">Settings</option>
+                        <option value="BENEFICIARY">Beneficiary</option>
+                        <option value="WALLET">Wallet</option>
+                        <option value="BUNDLE">Documents</option>
+                        <option value="SERVER_STARTUP">Server</option>
+                        <option value="DURESS">Security</option>
+                    </select>
+                    <button class="btn btn-sm btn-secondary" id="refresh-events"><i data-lucide="refresh-cw"></i> Refresh</button>
+                </div>
+                <div id="events-list" class="activity-list"></div>
+                <div id="pagination" class="activity-pagination" style="display: none;">
+                    <button class="btn btn-sm btn-secondary" id="prev-page"><i data-lucide="chevron-left"></i> Previous</button>
+                    <span id="page-info">Page 1</span>
+                    <button class="btn btn-sm btn-secondary" id="next-page">Next <i data-lucide="chevron-right"></i></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+        let allEvents = [];
+        let filteredEvents = [];
+        let currentPage = 1;
+        const PAGE_SIZE = 50;
+
+        function getStoredApiKey() {
+            return localStorage.getItem('lazarus-api-key') || '';
+        }
+
+        async function fetchWithAuth(url, options = {}) {
+            const headers = { 'Content-Type': 'application/json', ...options.headers };
+            const apiKey = getStoredApiKey();
+            if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
+            const response = await fetch(url, { ...options, headers });
+            if (response.status === 401) {
+                const key = prompt('API key required. Enter your Lazarus API key:');
+                if (key && key.length >= 16) {
+                    localStorage.setItem('lazarus-api-key', key);
+                    return fetchWithAuth(url, options);
+                }
+                window.location.href = '/';
+            }
+            return response;
+        }
+
+        function showError(msg) {
+            document.getElementById('error').style.display = 'block';
+            document.getElementById('error-message').textContent = msg;
+            document.getElementById('activity-content').style.display = 'none';
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        function detectType(content) {
+            if (content.startsWith('CHECKIN')) return 'checkin';
+            if (content.startsWith('FREEZE')) return 'freeze';
+            if (content.startsWith('SETTINGS')) return 'settings';
+            if (content.startsWith('BENEFICIARY')) return 'beneficiary';
+            if (content.startsWith('WALLET')) return 'wallet';
+            if (content.startsWith('BUNDLE') || content.startsWith('DOCUMENT')) return 'bundle';
+            if (content.startsWith('SERVER')) return 'settings';
+            if (content.startsWith('DURESS')) return 'security';
+            return 'security';
+        }
+
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        function renderEvents() {
+            const listEl = document.getElementById('events-list');
+            const searchTerm = document.getElementById('search-input').value.toLowerCase();
+            const typeFilter = document.getElementById('type-filter').value;
+
+            filteredEvents = allEvents.filter(e => {
+                const type = detectType(e.content);
+                if (typeFilter !== 'all' && !e.content.startsWith(typeFilter)) return false;
+                if (searchTerm && !e.content.toLowerCase().includes(searchTerm) && !e.timestamp.toLowerCase().includes(searchTerm)) return false;
+                return true;
+            });
+
+            const totalPages = Math.max(1, Math.ceil(filteredEvents.length / PAGE_SIZE));
+            currentPage = Math.min(currentPage, totalPages);
+
+            const start = (currentPage - 1) * PAGE_SIZE;
+            const pageEvents = filteredEvents.slice(start, start + PAGE_SIZE);
+
+            if (pageEvents.length === 0) {
+                listEl.innerHTML = '<div class="activity-empty"><i data-lucide="inbox" style="display: block; margin: 0 auto 12px; width: 32px; height: 32px;"></i>No events found.</div>';
+                document.getElementById('pagination').style.display = 'none';
+            } else {
+                listEl.innerHTML = pageEvents.map(e => {
+                    const type = detectType(e.content);
+                    const typeStr = e.content.split(':')[0] || 'EVENT';
+                    return `
+                        <div class="activity-item type-${type}">
+                            <div class="activity-time">${escapeHtml(e.timestamp)}</div>
+                            <div class="activity-content">${escapeHtml(e.content)}</div>
+                            <div class="activity-type-badge">${escapeHtml(typeStr)}</div>
+                        </div>
+                    `;
+                }).join('');
+                document.getElementById('pagination').style.display = 'flex';
+                document.getElementById('page-info').textContent = `Page ${currentPage} of ${totalPages} (${filteredEvents.length} events)`;
+            }
+
+            document.getElementById('prev-page').disabled = currentPage <= 1;
+            document.getElementById('next-page').disabled = currentPage >= totalPages;
+            lucide.createIcons();
+        }
+
+        async function loadEvents() {
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('loading').innerHTML = '<div class="loading-spinner"></div><p>Loading activity log...</p>';
+            document.getElementById('error').style.display = 'none';
+            document.getElementById('activity-content').style.display = 'none';
+            try {
+                const res = await fetchWithAuth(`${API_BASE}/events?limit=1000`);
+                if (!res.ok) { showError(`Failed to load (${res.status})`); return; }
+                const data = await res.json();
+                allEvents = data.events || [];
+                currentPage = 1;
+                renderEvents();
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('activity-content').style.display = 'block';
+            } catch (e) {
+                showError('Error: ' + e.message);
+            }
+        }
+
+        document.getElementById('search-input').addEventListener('input', () => { currentPage = 1; renderEvents(); });
+        document.getElementById('type-filter').addEventListener('change', () => { currentPage = 1; renderEvents(); });
+        document.getElementById('refresh-events').addEventListener('click', loadEvents);
+        document.getElementById('prev-page').addEventListener('click', () => { if (currentPage > 1) { currentPage--; renderEvents(); } });
+        document.getElementById('next-page').addEventListener('click', () => { const total = Math.ceil(filteredEvents.length / PAGE_SIZE); if (currentPage < total) { currentPage++; renderEvents(); } });
+
+        const navMap = {
+            'nav-dashboard': '/',
+            'nav-settings': '/settings',
+            'nav-beneficiaries': '/beneficiaries',
+            'nav-wallets': '/wallets',
+            'nav-pricing': '/pricing',
+        };
+        document.querySelectorAll('[data-action]').forEach(el => {
+            const action = el.dataset.action;
+            if (navMap[action]) el.addEventListener('click', () => { window.location.href = navMap[action]; });
+        });
+
+        document.addEventListener('DOMContentLoaded', () => { lucide.createIcons(); loadEvents(); });
+    </script>
+</body>
+</html>
