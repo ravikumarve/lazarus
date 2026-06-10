@@ -369,6 +369,13 @@ def pricing():
     return FileResponse(html_path, media_type="text/html")
 
 
+@app.get("/login")
+def login_page():
+    """Serve the login HTML page."""
+    html_path = Path(__file__).parent / "login.html"
+    return FileResponse(html_path, media_type="text/html")
+
+
 @app.get("/settings")
 def settings_page():
     """Serve the settings HTML page."""

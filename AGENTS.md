@@ -1,5 +1,19 @@
 # Lazarus Protocol - Agent Coordination
 
+### [2026-06-10 10:00] - Sprint 8 — UI Blank Page + Navigation + Sizing Fixes
+- **State**: Success
+- **Agents Deployed**: @codebase (direct execution)
+- **Problem**: New pages (settings, beneficiaries, wallets, activity) showed blank content because all HTML was hidden behind `display: none` and API call had to complete first. Navigation buttons "disappeared" because each page omitted its own button. Pricing page looked bulkier (wider cards, larger fonts) than rest of app.
+- **Fixes Applied**:
+  - Removed `style="display:none"` + loading spinners from all 4 new pages — content renders immediately, API fills values in-place
+  - All 6 pages now show all 6 nav buttons consistently (Dashboard/Settings/Beneficiaries/Wallets/Activity/Pricing), current page highlighted with `btn-primary`
+  - Added missing navMap entries (`nav-wallets` in wallets.html, `nav-activity` in activity.html)
+  - Pricing page: swapped single back-link for full nav bar
+  - Pricing CSS: card padding 24px→16px, price 2rem→1.5rem, grid minmax 350px→280px, featured scale 1.02→1.01, tighter table/buttons/features
+  - `showError()` no longer hides content — shows inline error banner only
+- **Files Modified**: settings.html, beneficiaries.html, wallets.html, activity.html, pricing.html, css/pricing.css
+- **Verification**: All 6 pages return 200, no hidden content divs, nav consistent across all pages
+
 ### [2026-06-09 18:00] - Sprint 7B Hotfix — Dashboard 401 Auth Fix
 - **State**: Success
 - **MCP Data Used**: grep (code analysis), read (file analysis), envsitter (.env key management)
