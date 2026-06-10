@@ -17,8 +17,8 @@ body {
 
 .login-card {
     background-color: var(--card-bg);
-    border-radius: 20px;
-    padding: 40px;
+    border-radius: 8px;
+    padding: 24px;
     border: 1px solid var(--border-color);
     box-shadow: var(--shadow);
     backdrop-filter: blur(10px);
@@ -31,9 +31,9 @@ body {
 
 .logo {
     display: block;
-    margin: 0 auto 16px;
-    width: 120px;
-    height: 120px;
+    margin: 0 auto 12px;
+    width: 80px;
+    height: 80px;
 }
 
 .logo img {
@@ -43,16 +43,16 @@ body {
 }
 
 .login-header h1 {
-    font-size: 2rem;
+    font-size: 1.5rem;
     font-weight: 800;
     color: var(--text-color);
-    margin-bottom: 8px;
+    margin-bottom: 6px;
     text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 .login-header p {
     color: var(--text-muted);
-    font-size: 1rem;
+    font-size: 0.82rem;
 }
 
 /* ── Form Overrides ──────────────────────────────────────── */
@@ -80,9 +80,9 @@ body {
 }
 
 .security-features h3 {
-    font-size: 0.9rem;
+    font-size: 0.72rem;
     color: var(--text-muted);
-    margin-bottom: 12px;
+    margin-bottom: 10px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
@@ -131,14 +131,15 @@ body {
     }
 
     .login-card {
-        padding: 30px 20px;
+        padding: 20px 16px;
     }
 
     .logo {
-        font-size: 3rem;
+        width: 60px;
+        height: 60px;
     }
 
     .login-header h1 {
-        font-size: 1.5rem;
+        font-size: 1.2rem;
     }
 }
