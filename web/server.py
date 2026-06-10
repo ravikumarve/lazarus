@@ -338,6 +338,7 @@ def get_deliveries(limit: int = 10) -> list[dict]:
 
 
 @app.get("/")
+@app.get("/dashboard")
 def root():
     """Serve the dashboard HTML."""
     html_path = Path(__file__).parent / "dashboard.html"
@@ -366,6 +367,14 @@ def favicon():
 def pricing():
     """Serve the pricing HTML page."""
     html_path = Path(__file__).parent / "pricing.html"
+    return FileResponse(html_path, media_type="text/html")
+
+
+@app.get("/secure")
+@app.get("/dashboard-secure")
+def secure_dashboard():
+    """Serve the JWT-secured dashboard HTML."""
+    html_path = Path(__file__).parent / "dashboard-secure.html"
     return FileResponse(html_path, media_type="text/html")
 
 
