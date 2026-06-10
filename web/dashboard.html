@@ -243,20 +243,19 @@
 
         <!-- API Key Modal -->
     <div id="apikey-modal" class="modal" style="display: none;">
-        <div class="modal-content" style="max-width: 500px;">
+        <div class="modal-content">
             <h3><i data-lucide="key"></i> API Key</h3>
-            <p id="apikey-message" style="margin-bottom: 15px; color: var(--text-secondary, '#aaa');">
+            <p id="apikey-message">
                 This dashboard requires an API key to communicate with the Lazarus server.
                 Set the <code>LAZARUS_API_KEY</code> environment variable when starting the server,
                 then enter the same key below.
             </p>
             <div class="form-group">
                 <label for="apikey-input">API Key:</label>
-                <input type="password" id="apikey-input" 
-                       style="width: 100%; padding: 10px; border: 1px solid var(--border-color, '#333'); border-radius: 6px; background: var(--bg-secondary, '#1a1a2e'); color: inherit; font-family: monospace;"
+                <input type="password" id="apikey-input" class="font-mono"
                        placeholder="Paste your Lazarus API key here">
             </div>
-            <div class="modal-actions" style="margin-top: 15px;">
+            <div class="modal-actions">
                 <button class="btn btn-primary" data-action="apikey-save"><i data-lucide="save"></i> Save Key</button>
                 <button class="btn btn-secondary" data-action="apikey-cancel"><i data-lucide="x"></i> Cancel</button>
             </div>
@@ -265,10 +264,9 @@
 
     <!-- API Docs Modal -->
     <div id="api-docs-modal" class="modal" style="display: none;">
-        <div class="modal-content" style="max-width: 800px;">
+        <div class="modal-content">
             <h3><i data-lucide="book-open"></i> API Documentation</h3>
             <div class="api-docs">
-                <h4>Available Endpoints:</h4>
                 <div class="endpoint">
                     <code>GET /status</code>
                     <p>Get current Lazarus protocol status</p>
