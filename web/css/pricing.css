@@ -3,26 +3,19 @@
    ============================================================ */
 
 /* ── Layout ──────────────────────────────────────────────── */
-.app-container {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 20px;
-    min-height: 100vh;
-}
 
 /* ── Pricing Override: wider cards ───────────────────────── */
 .grid {
-    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
 }
 
-/* ── Cards ───────────────────────────────────────────────── */
 .card {
-    padding: 24px;
+    padding: 16px;
 }
 
 .card.featured {
     border: 1px solid var(--accent-color);
-    transform: scale(1.02);
+    transform: scale(1.01);
 }
 
 .card.featured::before {
@@ -41,59 +34,49 @@
 }
 
 .card h2 {
-    font-size: 1.1rem;
+    font-size: 1rem;
 }
 
 /* ── Price Display ───────────────────────────────────────── */
 .price {
-    font-size: 2rem;
+    font-size: 1.5rem;
     font-weight: 800;
     color: var(--text-color);
-    margin-bottom: 4px;
+    margin-bottom: 2px;
 }
 
 .price-period {
     color: var(--text-muted);
-    font-size: 0.82rem;
-    margin-bottom: 16px;
+    font-size: 0.75rem;
+    margin-bottom: 12px;
 }
 
 /* ── Features List ───────────────────────────────────────── */
 .features-list {
-    margin-bottom: 20px;
+    margin-bottom: 14px;
 }
 
 .feature-item {
     display: flex;
     align-items: center;
-    gap: 10px;
-    margin-bottom: 8px;
-    padding: 4px 0;
-}
-
-.feature-item:last-child {
-    margin-bottom: 0;
+    gap: 8px;
+    margin-bottom: 6px;
+    padding: 2px 0;
 }
 
 .feature-icon {
     color: var(--success-color);
-    font-size: 0.9rem;
-    min-width: 18px;
+    font-size: 0.82rem;
+    min-width: 16px;
 }
 
 .feature-text {
     color: var(--text-color);
-    font-size: 0.82rem;
+    font-size: 0.78rem;
 }
 
-.feature-disabled {
-    opacity: 0.5;
-}
-
-.feature-disabled .feature-icon {
-    color: var(--text-muted);
-}
-
+.feature-disabled { opacity: 0.45; }
+.feature-disabled .feature-icon { color: var(--text-muted); }
 .feature-disabled .feature-text {
     color: var(--text-muted);
     text-decoration: line-through;
@@ -102,12 +85,12 @@
 /* ── Gumroad Buttons ─────────────────────────────────────── */
 .gumroad-btn {
     width: 100%;
-    padding: 10px 20px;
+    padding: 8px 16px;
     background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
     color: white;
     border: none;
     border-radius: 0;
-    font-size: 0.8rem;
+    font-size: 0.75rem;
     font-weight: 600;
     cursor: pointer;
     transition: var(--transition);
@@ -115,7 +98,7 @@
     display: block;
     text-decoration: none;
     text-transform: uppercase;
-    letter-spacing: 0.15em;
+    letter-spacing: 0.12em;
     font-family: var(--font-cinematic);
     box-shadow: 0 2px 10px rgba(var(--blood-rgb), 0.3);
 }
@@ -141,17 +124,17 @@
 /* ── Comparison Table ────────────────────────────────────── */
 .comparison-table {
     background-color: var(--card-bg);
-    border-radius: 8px;
-    padding: 20px;
+    border-radius: 6px;
+    padding: 14px;
     border: 1px solid var(--border-color);
     box-shadow: var(--shadow);
-    margin-bottom: 24px;
+    margin-bottom: 16px;
 }
 
 .comparison-table h2 {
     color: var(--accent-color);
-    margin-bottom: 20px;
-    font-size: 1rem;
+    margin-bottom: 14px;
+    font-size: 0.9rem;
     font-weight: 600;
     text-align: center;
 }
@@ -162,7 +145,7 @@ table {
 }
 
 th, td {
-    padding: 10px 12px;
+    padding: 6px 10px;
     text-align: left;
     border-bottom: 1px solid var(--border-color);
 }
@@ -170,82 +153,50 @@ th, td {
 th {
     color: var(--text-muted);
     font-weight: 600;
-    font-size: 0.75rem;
+    font-size: 0.7rem;
     text-transform: uppercase;
     letter-spacing: 0.05em;
 }
 
 td {
     color: var(--text-color);
-    font-size: 0.82rem;
+    font-size: 0.78rem;
 }
 
-.feature-check {
-    color: var(--success-color);
-    font-weight: bold;
-}
-
-.feature-cross {
-    color: var(--text-muted);
-    opacity: 0.5;
-}
-
-/* ── Navigation ──────────────────────────────────────────── */
-.back-link {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    color: var(--text-muted);
-    text-decoration: none;
-    margin-top: 16px;
-    padding: 8px 16px;
-    border-radius: 4px;
-    transition: var(--transition);
-    font-size: 0.82rem;
-}
-
-.back-link:hover {
-    color: var(--text-color);
-    background-color: var(--surface-bg);
-    transform: translateX(-3px);
-}
+.feature-check { color: var(--success-color); font-weight: bold; }
+.feature-cross { color: var(--text-muted); opacity: 0.5; }
 
 /* ── Guarantee ───────────────────────────────────────────── */
 .guarantee {
     text-align: center;
     color: var(--text-muted);
-    font-size: 0.75rem;
-    margin-top: 24px;
-    padding: 14px;
+    font-size: 0.72rem;
+    margin-top: 16px;
+    padding: 12px;
     background-color: var(--surface-bg);
     border-radius: 6px;
     border: 1px solid var(--border-color);
 }
 
+.guarantee h3 { font-size: 0.82rem; margin-bottom: 4px; }
+
 /* ── Responsive Overrides ────────────────────────────────── */
 @media (max-width: 768px) {
     .card {
-        padding: 20px;
+        padding: 14px;
     }
-
     .price {
-        font-size: 1.8rem;
+        font-size: 1.3rem;
     }
-
-    table {
-        font-size: 0.78rem;
-    }
-
     th, td {
-        padding: 8px 6px;
+        padding: 5px 6px;
     }
 }
 
 @media (max-width: 480px) {
     .comparison-table {
-        padding: 14px;
+        padding: 10px;
     }
-
     table {
         display: block;
         overflow-x: auto;

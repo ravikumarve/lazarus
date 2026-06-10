@@ -22,6 +22,7 @@
             <p>Configure your Lazarus Protocol</p>
             <div class="header-actions">
                 <button class="btn btn-sm btn-secondary" data-action="nav-dashboard"><i data-lucide="layout-dashboard"></i> Dashboard</button>
+                <button class="btn btn-sm btn-primary" data-action="nav-settings"><i data-lucide="sliders"></i> Settings</button>
                 <button class="btn btn-sm btn-secondary" data-action="nav-beneficiaries"><i data-lucide="users"></i> Beneficiaries</button>
                 <button class="btn btn-sm btn-secondary" data-action="nav-wallets"><i data-lucide="wallet"></i> Wallets</button>
                 <button class="btn btn-sm btn-secondary" data-action="nav-activity"><i data-lucide="activity"></i> Activity</button>
@@ -29,16 +30,11 @@
             </div>
         </div>
 
-        <div id="loading" class="loading" style="display: none;">
-            <div class="loading-spinner"></div>
-            <p>Loading settings...</p>
-        </div>
-
         <div id="error" class="error" style="display: none;">
             <p id="error-message">Failed to load settings.</p>
         </div>
 
-        <div id="settings-content" style="display: none;">
+        <div id="settings-content">
             <div class="card">
                 <h2><i data-lucide="sliders"></i> Protocol Configuration</h2>
                 <div class="settings-grid">
@@ -106,7 +102,7 @@
             </div>
 
             <div class="card" style="margin-top: 16px;">
-                <h2><i data-lucide="info"></i> Subscription Info</h2>
+                <h2><i data-lucide="info"></i> Subscription</h2>
                 <div class="settings-grid">
                     <div class="setting-row">
                         <div class="setting-label">
@@ -157,14 +153,10 @@
         function showError(msg) {
             document.getElementById('error').style.display = 'block';
             document.getElementById('error-message').textContent = msg;
-            document.getElementById('settings-content').style.display = 'none';
-            document.getElementById('loading').style.display = 'none';
         }
 
         async function loadSettings() {
-            document.getElementById('loading').style.display = 'block';
             document.getElementById('error').style.display = 'none';
-            document.getElementById('settings-content').style.display = 'none';
             try {
                 const res = await fetchWithAuth(`${API_BASE}/api/settings`);
                 if (!res.ok) { showError(`Failed to load settings (${res.status})`); return; }
@@ -177,8 +169,6 @@
                 document.getElementById('sub-tier').textContent = data.subscription_tier || 'free';
                 document.getElementById('wallet-limit').textContent = data.wallet_limit || 1;
                 document.getElementById('license-key').textContent = data.license_key || 'None';
-                document.getElementById('loading').style.display = 'none';
-                document.getElementById('settings-content').style.display = 'block';
             } catch (e) {
                 showError('Error loading settings: ' + e.message);
             }
@@ -219,6 +209,7 @@
         // Navigation
         const navMap = {
             'nav-dashboard': '/',
+            'nav-settings': '/settings',
             'nav-beneficiaries': '/beneficiaries',
             'nav-wallets': '/wallets',
             'nav-activity': '/activity',

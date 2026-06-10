@@ -25,21 +25,17 @@
                 <button class="btn btn-sm btn-secondary" data-action="nav-dashboard"><i data-lucide="layout-dashboard"></i> Dashboard</button>
                 <button class="btn btn-sm btn-secondary" data-action="nav-settings"><i data-lucide="sliders"></i> Settings</button>
                 <button class="btn btn-sm btn-secondary" data-action="nav-beneficiaries"><i data-lucide="users"></i> Beneficiaries</button>
+                <button class="btn btn-sm btn-primary" data-action="nav-wallets"><i data-lucide="wallet"></i> Wallets</button>
                 <button class="btn btn-sm btn-secondary" data-action="nav-activity"><i data-lucide="activity"></i> Activity</button>
                 <button class="btn btn-sm btn-secondary" data-action="nav-pricing"><i data-lucide="credit-card"></i> Pricing</button>
             </div>
-        </div>
-
-        <div id="loading" class="loading" style="display: none;">
-            <div class="loading-spinner"></div>
-            <p>Loading wallets...</p>
         </div>
 
         <div id="error" class="error" style="display: none;">
             <p id="error-message">Failed to load wallets.</p>
         </div>
 
-        <div id="wallets-content" style="display: none;">
+        <div id="wallets-content">
             <div class="card">
                 <h2><i data-lucide="wallet"></i> Crypto Wallets</h2>
                 <div class="wallet-stats" id="wallet-stats"></div>
@@ -112,8 +108,6 @@
         function showError(msg) {
             document.getElementById('error').style.display = 'block';
             document.getElementById('error-message').textContent = msg;
-            document.getElementById('wallets-content').style.display = 'none';
-            document.getElementById('loading').style.display = 'none';
         }
 
         function escapeHtml(str) {
@@ -128,10 +122,7 @@
         }
 
         async function loadWallets() {
-            document.getElementById('loading').style.display = 'block';
-            document.getElementById('loading').innerHTML = '<div class="loading-spinner"></div><p>Loading wallets...</p>';
             document.getElementById('error').style.display = 'none';
-            document.getElementById('wallets-content').style.display = 'none';
             try {
                 const [walletRes, bundleRes] = await Promise.all([
                     fetchWithAuth(`${API_BASE}/api/wallets`),
@@ -194,8 +185,6 @@
                 }
 
                 lucide.createIcons();
-                document.getElementById('loading').style.display = 'none';
-                document.getElementById('wallets-content').style.display = 'block';
             } catch (e) {
                 showError('Error: ' + e.message);
             }
@@ -263,6 +252,7 @@
             'nav-dashboard': '/',
             'nav-settings': '/settings',
             'nav-beneficiaries': '/beneficiaries',
+            'nav-wallets': '/wallets',
             'nav-activity': '/activity',
             'nav-pricing': '/pricing',
         };

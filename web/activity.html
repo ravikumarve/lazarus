@@ -25,20 +25,16 @@
                 <button class="btn btn-sm btn-secondary" data-action="nav-settings"><i data-lucide="sliders"></i> Settings</button>
                 <button class="btn btn-sm btn-secondary" data-action="nav-beneficiaries"><i data-lucide="users"></i> Beneficiaries</button>
                 <button class="btn btn-sm btn-secondary" data-action="nav-wallets"><i data-lucide="wallet"></i> Wallets</button>
+                <button class="btn btn-sm btn-primary" data-action="nav-activity"><i data-lucide="activity"></i> Activity</button>
                 <button class="btn btn-sm btn-secondary" data-action="nav-pricing"><i data-lucide="credit-card"></i> Pricing</button>
             </div>
-        </div>
-
-        <div id="loading" class="loading" style="display: none;">
-            <div class="loading-spinner"></div>
-            <p>Loading activity log...</p>
         </div>
 
         <div id="error" class="error" style="display: none;">
             <p id="error-message">Failed to load activity log.</p>
         </div>
 
-        <div id="activity-content" style="display: none;">
+        <div id="activity-content">
             <div class="card">
                 <h2><i data-lucide="activity"></i> Event History</h2>
                 <div class="activity-filters">
@@ -96,8 +92,6 @@
         function showError(msg) {
             document.getElementById('error').style.display = 'block';
             document.getElementById('error-message').textContent = msg;
-            document.getElementById('activity-content').style.display = 'none';
-            document.getElementById('loading').style.display = 'none';
         }
 
         function detectType(content) {
@@ -161,10 +155,7 @@
         }
 
         async function loadEvents() {
-            document.getElementById('loading').style.display = 'block';
-            document.getElementById('loading').innerHTML = '<div class="loading-spinner"></div><p>Loading activity log...</p>';
             document.getElementById('error').style.display = 'none';
-            document.getElementById('activity-content').style.display = 'none';
             try {
                 const res = await fetchWithAuth(`${API_BASE}/events?limit=1000`);
                 if (!res.ok) { showError(`Failed to load (${res.status})`); return; }
@@ -172,8 +163,6 @@
                 allEvents = data.events || [];
                 currentPage = 1;
                 renderEvents();
-                document.getElementById('loading').style.display = 'none';
-                document.getElementById('activity-content').style.display = 'block';
             } catch (e) {
                 showError('Error: ' + e.message);
             }
@@ -190,6 +179,7 @@
             'nav-settings': '/settings',
             'nav-beneficiaries': '/beneficiaries',
             'nav-wallets': '/wallets',
+            'nav-activity': '/activity',
             'nav-pricing': '/pricing',
         };
         document.querySelectorAll('[data-action]').forEach(el => {

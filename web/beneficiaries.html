@@ -23,22 +23,18 @@
             <div class="header-actions">
                 <button class="btn btn-sm btn-secondary" data-action="nav-dashboard"><i data-lucide="layout-dashboard"></i> Dashboard</button>
                 <button class="btn btn-sm btn-secondary" data-action="nav-settings"><i data-lucide="sliders"></i> Settings</button>
+                <button class="btn btn-sm btn-primary" data-action="nav-beneficiaries"><i data-lucide="users"></i> Beneficiaries</button>
                 <button class="btn btn-sm btn-secondary" data-action="nav-wallets"><i data-lucide="wallet"></i> Wallets</button>
                 <button class="btn btn-sm btn-secondary" data-action="nav-activity"><i data-lucide="activity"></i> Activity</button>
                 <button class="btn btn-sm btn-secondary" data-action="nav-pricing"><i data-lucide="credit-card"></i> Pricing</button>
             </div>
         </div>
 
-        <div id="loading" class="loading" style="display: none;">
-            <div class="loading-spinner"></div>
-            <p>Loading beneficiaries...</p>
-        </div>
-
         <div id="error" class="error" style="display: none;">
             <p id="error-message">Failed to load beneficiaries.</p>
         </div>
 
-        <div id="beneficiaries-content" style="display: none;">
+        <div id="beneficiaries-content">
             <div class="card">
                 <h2><i data-lucide="users"></i> Your Beneficiary</h2>
                 <p class="status-label" style="margin-bottom: 16px;">The person who will receive your encrypted secrets if the protocol triggers.</p>
@@ -96,8 +92,6 @@
         function showError(msg) {
             document.getElementById('error').style.display = 'block';
             document.getElementById('error-message').textContent = msg;
-            document.getElementById('beneficiaries-content').style.display = 'none';
-            document.getElementById('loading').style.display = 'none';
         }
 
         function renderBeneficiary(ben) {
@@ -149,17 +143,13 @@
         }
 
         async function loadBeneficiaries() {
-            document.getElementById('loading').style.display = 'block';
             document.getElementById('error').style.display = 'none';
-            document.getElementById('beneficiaries-content').style.display = 'none';
             try {
                 const res = await fetchWithAuth(`${API_BASE}/api/beneficiaries`);
                 if (!res.ok) { showError(`Failed to load (${res.status})`); return; }
                 const data = await res.json();
                 const ben = data.beneficiaries && data.beneficiaries.length > 0 ? data.beneficiaries[0] : null;
                 renderBeneficiary(ben);
-                document.getElementById('loading').style.display = 'none';
-                document.getElementById('beneficiaries-content').style.display = 'block';
             } catch (e) {
                 showError('Error: ' + e.message);
             }
@@ -198,6 +188,7 @@
         const navMap = {
             'nav-dashboard': '/',
             'nav-settings': '/settings',
+            'nav-beneficiaries': '/beneficiaries',
             'nav-wallets': '/wallets',
             'nav-activity': '/activity',
             'nav-pricing': '/pricing',

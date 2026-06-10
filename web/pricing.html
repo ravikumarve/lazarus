@@ -23,9 +23,12 @@
             <h1><img src="/lazarus-logo.svg" class="header-logo" alt=""> Lazarus Protocol Pricing</h1>
             <p>Choose the plan that fits your digital legacy protection needs</p>
             <div class="header-actions">
-                <a href="/" class="back-link">
-                    ← Back to Dashboard
-                </a>
+                <button class="btn btn-sm btn-secondary" data-action="nav-dashboard"><i data-lucide="layout-dashboard"></i> Dashboard</button>
+                <button class="btn btn-sm btn-secondary" data-action="nav-settings"><i data-lucide="sliders"></i> Settings</button>
+                <button class="btn btn-sm btn-secondary" data-action="nav-beneficiaries"><i data-lucide="users"></i> Beneficiaries</button>
+                <button class="btn btn-sm btn-secondary" data-action="nav-wallets"><i data-lucide="wallet"></i> Wallets</button>
+                <button class="btn btn-sm btn-secondary" data-action="nav-activity"><i data-lucide="activity"></i> Activity</button>
+                <button class="btn btn-sm btn-primary" data-action="nav-pricing"><i data-lucide="credit-card"></i> Pricing</button>
             </div>
         </div>
 
@@ -177,9 +180,9 @@
             <p>Not satisfied with Lazarus Protocol Pro? Get a full refund within 30 days, no questions asked.</p>
         </div>
 
-        <a href="/" class="back-link">
-            ← Return to Dashboard
-        </a>
+        <div style="text-align: center; margin-top: 20px;">
+            <button class="btn btn-sm btn-secondary" data-action="nav-dashboard" style="display: inline-flex; align-items: center; gap: 6px;"><i data-lucide="layout-dashboard"></i> Back to Dashboard</button>
+        </div>
     </div>
 
     <script>
@@ -205,6 +208,20 @@
 
         // Initialize theme
         loadSavedTheme();
+
+        // Navigation
+        const navMap = {
+            'nav-dashboard': '/',
+            'nav-settings': '/settings',
+            'nav-beneficiaries': '/beneficiaries',
+            'nav-wallets': '/wallets',
+            'nav-activity': '/activity',
+            'nav-pricing': '/pricing',
+        };
+        document.querySelectorAll('[data-action]').forEach(el => {
+            const action = el.dataset.action;
+            if (navMap[action]) el.addEventListener('click', () => { window.location.href = navMap[action]; });
+        });
 
         // Add fade-in animation
         document.addEventListener('DOMContentLoaded', function() {
