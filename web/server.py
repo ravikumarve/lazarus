@@ -363,6 +363,13 @@ def favicon():
     raise HTTPException(status_code=404, detail="Favicon not found")
 
 
+@app.get("/landing")
+def landing():
+    """Serve the landing/marketing page (index.html)."""
+    html_path = Path(__file__).parent / "index.html"
+    return FileResponse(html_path, media_type="text/html")
+
+
 @app.get("/pricing")
 def pricing():
     """Serve the pricing HTML page."""
