@@ -420,6 +420,44 @@ def activity_page():
     return FileResponse(html_path, media_type="text/html")
 
 
+@app.get("/forgot-password")
+def forgot_password():
+    """Serve a simple forgot-password placeholder page."""
+    html = """<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lazarus Protocol — Password Reset</title>
+    <link rel="icon" type="image/svg+xml" href="/lazarus-logo.svg" />
+    <link rel="stylesheet" href="/css/base.css">
+    <link rel="stylesheet" href="/css/login.css">
+    <script src="https://unpkg.com/lucide@latest" defer></script>
+</head>
+<body>
+    <div class="film-grain"></div>
+    <div class="login-container">
+        <div class="login-card fade-in">
+            <div class="login-header">
+                <div class="logo"><img src="/lazarus-logo.svg" alt=""></div>
+                <h1>Password Reset</h1>
+                <p>Self-hosted instances manage passwords locally</p>
+            </div>
+            <div class="info">
+                Password reset is handled by your local instance administrator.
+                Check your server configuration or contact your admin.
+            </div>
+            <div class="footer" style="margin-top: 20px;">
+                <p><a href="/login">Back to Login</a></p>
+            </div>
+        </div>
+    </div>
+    <script>document.addEventListener('DOMContentLoaded', () => { lucide.createIcons(); });</script>
+</body>
+</html>"""
+    return HTMLResponse(content=html)
+
+
 # Static CSS files
 CSS_FILES = {
     "base.css": "base.css",
@@ -442,6 +480,23 @@ def serve_css(css_name: str):
     if css_path.exists():
         return FileResponse(css_path, media_type="text/css")
     raise HTTPException(status_code=404, detail=f"CSS not found: {css_name}")
+
+
+# Static JS files
+JS_FILES = {
+    "security.js": "security.js",
+}
+
+
+@app.get("/js/{js_name}")
+def serve_js(js_name: str):
+    """Serve JS files from web/js directory."""
+    if js_name not in JS_FILES:
+        raise HTTPException(status_code=404, detail=f"JS not found: {js_name}")
+    js_path = Path(__file__).parent / "js" / JS_FILES[js_name]
+    if js_path.exists():
+        return FileResponse(js_path, media_type="application/javascript")
+    raise HTTPException(status_code=404, detail=f"JS not found: {js_name}")
 
 
 @app.get("/status")

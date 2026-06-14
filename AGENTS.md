@@ -1,5 +1,19 @@
 # Lazarus Protocol - Agent Coordination
 
+### [2026-06-15 16:00] — Frontend Audit & 7 Bug Fixes
+- **State**: Success — all routes return 200, no errors
+- **Agents Deployed**: @codebase (direct execution)
+- **Problem**: Frontend had critical and high-severity issues: `security.js` returned 404 (login+secure dashboard broken), CSP blocked CDN fonts/icons on login, 4 pages missing theme init, broken forgot-password link, duplicate modal CSS, extra CSS load.
+- **Fixes Applied**:
+  - 🔴 **Critical**: Added `/js/{js_name}` route to `server.py` — login & secure dashboard now load security.js correctly (HTTP 200, 22KB)
+  - 🟡 **High**: Fixed CSP on `login.html` — added `unpkg.com`, `fonts.googleapis.com`, `fonts.gstatic.com` to allow Lucide icons & Google Fonts
+  - 🟡 **High**: Added `loadSavedTheme()` + toggle wiring to `settings.html`, `beneficiaries.html`, `wallets.html`, `activity.html` — theme preference now persists across all 9 pages
+  - 🟡 **High**: Added `/forgot-password` route in `server.py` with placeholder page — no more 404 redirect to dashboard
+  - 🟢 **Low**: Removed duplicate `.modal`/`.modal-content`/`.modal-actions` CSS from `dashboard.css` (already defined in `base.css`)
+  - 🟢 **Low**: Removed redundant `dashboard.css` reference from `wallets.html`
+- **Files Modified**: server.py, login.html, settings.html, beneficiaries.html, wallets.html, activity.html, css/dashboard.css
+- **Verification**: All 9 HTML pages, 8 CSS files, JS, SVG, and forgot-password → all HTTP 200 ✅
+
 ### [2026-06-10 10:00] - Sprint 8 — UI Blank Page + Navigation + Sizing Fixes
 - **State**: Success
 - **Agents Deployed**: @codebase (direct execution)

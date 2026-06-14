@@ -10,7 +10,6 @@
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;800&family=Inter:wght@300;400;500&family=JetBrains+Mono:wght@100..800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/css/base.css">
     <link rel="stylesheet" href="/css/wallets.css">
-    <link rel="stylesheet" href="/css/dashboard.css">
     <script src="https://unpkg.com/lucide@latest" defer></script>
 </head>
 <body>
@@ -261,7 +260,30 @@
             if (navMap[action]) el.addEventListener('click', () => { window.location.href = navMap[action]; });
         });
 
-        document.addEventListener('DOMContentLoaded', () => { lucide.createIcons(); loadWallets(); });
+        // Theme management
+        function toggleTheme() {
+            const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', newTheme);
+            localStorage.setItem('lazarus-theme', newTheme);
+            const themeToggle = document.querySelector('.theme-toggle');
+            themeToggle.textContent = newTheme === 'dark' ? '🌓' : '🌙';
+        }
+
+        function loadSavedTheme() {
+            const savedTheme = localStorage.getItem('lazarus-theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+            const themeToggle = document.querySelector('.theme-toggle');
+            if (themeToggle) themeToggle.textContent = savedTheme === 'dark' ? '🌓' : '🌙';
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadSavedTheme();
+            const themeToggle = document.querySelector('.theme-toggle');
+            if (themeToggle) themeToggle.addEventListener('click', toggleTheme);
+            lucide.createIcons();
+            loadWallets();
+        });
     </script>
 </body>
 </html>

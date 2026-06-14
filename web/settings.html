@@ -222,7 +222,30 @@
             }
         });
 
-        document.addEventListener('DOMContentLoaded', () => { lucide.createIcons(); loadSettings(); });
+        // Theme management
+        function toggleTheme() {
+            const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', newTheme);
+            localStorage.setItem('lazarus-theme', newTheme);
+            const themeToggle = document.querySelector('.theme-toggle');
+            themeToggle.textContent = newTheme === 'dark' ? '🌓' : '🌙';
+        }
+
+        function loadSavedTheme() {
+            const savedTheme = localStorage.getItem('lazarus-theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+            const themeToggle = document.querySelector('.theme-toggle');
+            if (themeToggle) themeToggle.textContent = savedTheme === 'dark' ? '🌓' : '🌙';
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadSavedTheme();
+            const themeToggle = document.querySelector('.theme-toggle');
+            if (themeToggle) themeToggle.addEventListener('click', toggleTheme);
+            lucide.createIcons();
+            loadSettings();
+        });
     </script>
 </body>
 </html>
