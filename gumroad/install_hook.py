@@ -12,7 +12,7 @@ import os
 import sys
 from typing import Optional
 
-from gumroad.license_check import verify_license, LicenseStatus, LicenseInfo
+from gumroad.license_check import LicenseStatus, verify_license
 
 logger = logging.getLogger("gumroad.install_hook")
 
@@ -66,7 +66,7 @@ def run_install_hook(
         print("  ℹ️  Skipping license activation. Run 'lazarus activate' later.")
         return True
 
-    print(f"  🔑 Verifying license key...")
+    print("  🔑 Verifying license key...")
     result = verify_license(license_key, product_id)
 
     if result.status == LicenseStatus.VALID:
@@ -75,10 +75,10 @@ def run_install_hook(
             print(f"     Licensed to: {result.email}")
         return True
     elif result.status == LicenseStatus.INVALID:
-        print(f"  ❌ Invalid license key. Please check and try again.")
+        print("  ❌ Invalid license key. Please check and try again.")
         return False
     else:
-        print(f"  ⚠️  Could not verify license (network issue). You can activate later.")
+        print("  ⚠️  Could not verify license (network issue). You can activate later.")
         return True
 
 

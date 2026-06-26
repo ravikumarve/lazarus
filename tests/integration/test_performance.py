@@ -10,29 +10,26 @@ Tests for performance characteristics under load:
 """
 
 import os
-import pytest
-import tempfile
 import shutil
-from pathlib import Path
-from datetime import datetime, UTC, timedelta
-from unittest.mock import patch, MagicMock
-import time
+import tempfile
 import threading
-import asyncio
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import time
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 from core.config import (
-    load_config,
-    save_config,
-    record_checkin,
     LAZARUS_DIR,
+    load_config,
+    record_checkin,
+    save_config,
 )
-from core.database import DatabaseManager, DatabaseConfig
+from core.database import DatabaseConfig, DatabaseManager
+from core.rate_limiter import DistributedRateLimiter
 from core.security import (
     verify_api_key,
-    key_manager,
 )
-from core.rate_limiter import DistributedRateLimiter
 
 
 @pytest.fixture
@@ -40,13 +37,13 @@ def temp_lazarus_dir():
     """Create temporary Lazarus directory for testing"""
     temp_dir = tempfile.mkdtemp()
     original_dir = LAZARUS_DIR
-    
+
     # Override LAZARUS_DIR for testing
     import core.config
     core.config.LAZARUS_DIR = Path(temp_dir)
-    
+
     yield Path(temp_dir)
-    
+
     # Cleanup
     shutil.rmtree(temp_dir, ignore_errors=True)
     core.config.LAZARUS_DIR = original_dir
@@ -95,14 +92,14 @@ class TestConcurrentRequestHandling:
         num_threads = 50
         results = []
         errors = []
-        
+
         def verify_key(thread_id):
             try:
                 result = verify_api_key(test_api_key)
                 results.append((thread_id, result))
             except Exception as e:
                 errors.append((thread_id, str(e)))
-        
+
         # Step 2: Create threads
         start_time = time.time()
         threads = []
@@ -110,17 +107,17 @@ class TestConcurrentRequestHandling:
             thread = threading.Thread(target=verify_key, args=(i,))
             threads.append(thread)
             thread.start()
-        
+
         # Step 3: Wait for completion
         for thread in threads:
             thread.join()
         duration = time.time() - start_time
-        
+
         # Step 4: Verify results
         assert len(results) == num_threads
         assert len(errors) == 0
         assert all(result[1] for result in results)
-        
+
         # Step 5: Verify performance
         assert duration < 5.0  # Should complete in < 5 seconds
         avg_time = duration / num_threads
@@ -128,8 +125,8 @@ class TestConcurrentRequestHandling:
 
     def test_concurrent_checkin_operations(self, temp_lazarus_dir, test_api_key):
         """Test concurrent check-in operations"""
-        from core.config import BeneficiaryConfig, VaultConfig, LazarusConfig
-        
+        from core.config import BeneficiaryConfig, LazarusConfig, VaultConfig
+
         # Step 1: Create initial configuration
         config = LazarusConfig(
             owner_name="Test Owner",
@@ -156,12 +153,12 @@ class TestConcurrentRequestHandling:
             license_valid_until=None
         )
         save_config(config)
-        
+
         # Step 2: Perform concurrent check-ins
         num_threads = 20
         results = []
         errors = []
-        
+
         def perform_checkin(thread_id):
             try:
                 config = load_config()
@@ -170,7 +167,7 @@ class TestConcurrentRequestHandling:
                 results.append(thread_id)
             except Exception as e:
                 errors.append((thread_id, str(e)))
-        
+
         # Step 3: Create threads
         start_time = time.time()
         threads = []
@@ -178,16 +175,16 @@ class TestConcurrentRequestHandling:
             thread = threading.Thread(target=perform_checkin, args=(i,))
             threads.append(thread)
             thread.start()
-        
+
         # Step 4: Wait for completion
         for thread in threads:
             thread.join()
         duration = time.time() - start_time
-        
+
         # Step 5: Verify results
         assert len(results) == num_threads
         assert len(errors) == 0
-        
+
         # Step 6: Verify performance
         assert duration < 10.0  # Should complete in < 10 seconds
         avg_time = duration / num_threads
@@ -201,12 +198,12 @@ class TestConcurrentRequestHandling:
             default_limit=100,
             default_window=60
         )
-        
+
         # Step 2: Perform concurrent rate limit checks
         num_threads = 100
         results = []
         errors = []
-        
+
         def check_rate_limit(thread_id):
             try:
                 allowed, remaining = limiter.is_allowed(
@@ -217,7 +214,7 @@ class TestConcurrentRequestHandling:
                 results.append((thread_id, allowed, remaining))
             except Exception as e:
                 errors.append((thread_id, str(e)))
-        
+
         # Step 3: Create threads
         start_time = time.time()
         threads = []
@@ -225,17 +222,17 @@ class TestConcurrentRequestHandling:
             thread = threading.Thread(target=check_rate_limit, args=(i,))
             threads.append(thread)
             thread.start()
-        
+
         # Step 4: Wait for completion
         for thread in threads:
             thread.join()
         duration = time.time() - start_time
-        
+
         # Step 5: Verify results
         assert len(results) == num_threads
         assert len(errors) == 0
         assert all(result[1] for result in results)  # All should be allowed
-        
+
         # Step 6: Verify performance
         assert duration < 5.0  # Should complete in < 5 seconds
         avg_time = duration / num_threads
@@ -251,7 +248,7 @@ class TestDatabasePerformance:
         num_threads = 50
         results = []
         errors = []
-        
+
         def create_user(thread_id):
             try:
                 user_id = test_database.create_user(
@@ -263,7 +260,7 @@ class TestDatabasePerformance:
                 results.append((thread_id, user_id))
             except Exception as e:
                 errors.append((thread_id, str(e)))
-        
+
         # Step 2: Create threads
         start_time = time.time()
         threads = []
@@ -271,17 +268,17 @@ class TestDatabasePerformance:
             thread = threading.Thread(target=create_user, args=(i,))
             threads.append(thread)
             thread.start()
-        
+
         # Step 3: Wait for completion
         for thread in threads:
             thread.join()
         duration = time.time() - start_time
-        
+
         # Step 4: Verify results
         assert len(results) == num_threads
         assert len(errors) == 0
         assert all(result[1] is not None for result in results)
-        
+
         # Step 5: Verify performance
         assert duration < 10.0  # Should complete in < 10 seconds
         avg_time = duration / num_threads
@@ -299,12 +296,12 @@ class TestDatabasePerformance:
                 api_key=f"test_api_key_{i}"
             )
             user_ids.append(user_id)
-        
+
         # Step 2: Perform concurrent queries
         num_threads = 100
         results = []
         errors = []
-        
+
         def query_user(thread_id):
             try:
                 user_id = user_ids[thread_id % len(user_ids)]
@@ -312,7 +309,7 @@ class TestDatabasePerformance:
                 results.append((thread_id, user is not None))
             except Exception as e:
                 errors.append((thread_id, str(e)))
-        
+
         # Step 3: Create threads
         start_time = time.time()
         threads = []
@@ -320,17 +317,17 @@ class TestDatabasePerformance:
             thread = threading.Thread(target=query_user, args=(i,))
             threads.append(thread)
             thread.start()
-        
+
         # Step 4: Wait for completion
         for thread in threads:
             thread.join()
         duration = time.time() - start_time
-        
+
         # Step 5: Verify results
         assert len(results) == num_threads
         assert len(errors) == 0
         assert all(result[1] for result in results)
-        
+
         # Step 6: Verify performance
         assert duration < 5.0  # Should complete in < 5 seconds
         avg_time = duration / num_threads
@@ -341,7 +338,7 @@ class TestDatabasePerformance:
         # Step 1: Perform multiple transactions
         num_transactions = 50
         results = []
-        
+
         start_time = time.time()
         for i in range(num_transactions):
             try:
@@ -352,19 +349,19 @@ class TestDatabasePerformance:
                     password_hash="hashed_password_123",
                     api_key=f"test_api_key_{i}"
                 )
-                
+
                 # Query user
                 user = test_database.get_user(user_id)
-                
+
                 results.append(user_id is not None and user is not None)
-            except Exception as e:
+            except Exception:
                 results.append(False)
-        
+
         duration = time.time() - start_time
-        
+
         # Step 2: Verify results
         assert all(results)
-        
+
         # Step 3: Verify performance
         assert duration < 10.0  # Should complete in < 10 seconds
         avg_time = duration / num_transactions
@@ -377,7 +374,7 @@ class TestStoragePerformance:
     def test_concurrent_file_encryption(self, temp_lazarus_dir):
         """Test concurrent file encryption"""
         from core.encryption import encrypt_file
-        
+
         # Step 1: Create test files
         files = []
         for i in range(20):
@@ -385,11 +382,11 @@ class TestStoragePerformance:
             test_content = b"Test content for encryption " * 100  # ~2KB
             test_file.write_bytes(test_content)
             files.append(test_file)
-        
+
         # Step 2: Perform concurrent encryption
         results = []
         errors = []
-        
+
         def encrypt_file_thread(file_path, thread_id):
             try:
                 encrypted_path = temp_lazarus_dir / f"encrypted_{thread_id}.bin"
@@ -401,7 +398,7 @@ class TestStoragePerformance:
                 results.append(thread_id)
             except Exception as e:
                 errors.append((thread_id, str(e)))
-        
+
         # Step 3: Create threads
         start_time = time.time()
         threads = []
@@ -409,16 +406,16 @@ class TestStoragePerformance:
             thread = threading.Thread(target=encrypt_file_thread, args=(file_path, i))
             threads.append(thread)
             thread.start()
-        
+
         # Step 4: Wait for completion
         for thread in threads:
             thread.join()
         duration = time.time() - start_time
-        
+
         # Step 5: Verify results
         assert len(results) == len(files)
         assert len(errors) == 0
-        
+
         # Step 6: Verify performance
         assert duration < 10.0  # Should complete in < 10 seconds
         avg_time = duration / len(files)
@@ -426,15 +423,15 @@ class TestStoragePerformance:
 
     def test_concurrent_file_decryption(self, temp_lazarus_dir):
         """Test concurrent file decryption"""
-        from core.encryption import encrypt_file, decrypt_file
-        
+        from core.encryption import decrypt_file, encrypt_file
+
         # Step 1: Create and encrypt test files
         files = []
         for i in range(20):
             test_file = temp_lazarus_dir / f"test_file_{i}.txt"
             test_content = b"Test content for decryption " * 100  # ~2KB
             test_file.write_bytes(test_content)
-            
+
             encrypted_file = temp_lazarus_dir / f"encrypted_{i}.bin"
             encrypt_file(
                 str(test_file),
@@ -442,11 +439,11 @@ class TestStoragePerformance:
                 "test_encryption_key_32bytes!!"
             )
             files.append(encrypted_file)
-        
+
         # Step 2: Perform concurrent decryption
         results = []
         errors = []
-        
+
         def decrypt_file_thread(file_path, thread_id):
             try:
                 decrypted_path = temp_lazarus_dir / f"decrypted_{thread_id}.txt"
@@ -458,7 +455,7 @@ class TestStoragePerformance:
                 results.append(thread_id)
             except Exception as e:
                 errors.append((thread_id, str(e)))
-        
+
         # Step 3: Create threads
         start_time = time.time()
         threads = []
@@ -466,16 +463,16 @@ class TestStoragePerformance:
             thread = threading.Thread(target=decrypt_file_thread, args=(file_path, i))
             threads.append(thread)
             thread.start()
-        
+
         # Step 4: Wait for completion
         for thread in threads:
             thread.join()
         duration = time.time() - start_time
-        
+
         # Step 5: Verify results
         assert len(results) == len(files)
         assert len(errors) == 0
-        
+
         # Step 6: Verify performance
         assert duration < 10.0  # Should complete in < 10 seconds
         avg_time = duration / len(files)
@@ -487,17 +484,18 @@ class TestMemoryUsage:
 
     def test_memory_usage_during_concurrent_operations(self, temp_lazarus_dir, test_database):
         """Test memory usage during concurrent operations"""
-        import psutil
         import gc
-        
+
+        import psutil
+
         # Step 1: Get initial memory usage
         process = psutil.Process()
         initial_memory = process.memory_info().rss / 1024 / 1024  # MB
-        
+
         # Step 2: Perform concurrent operations
         num_threads = 50
         results = []
-        
+
         def create_and_query_user(thread_id):
             try:
                 user_id = test_database.create_user(
@@ -508,42 +506,43 @@ class TestMemoryUsage:
                 )
                 user = test_database.get_user(user_id)
                 results.append(user_id is not None and user is not None)
-            except Exception as e:
+            except Exception:
                 results.append(False)
-        
+
         # Step 3: Create threads
         threads = []
         for i in range(num_threads):
             thread = threading.Thread(target=create_and_query_user, args=(i,))
             threads.append(thread)
             thread.start()
-        
+
         # Step 4: Wait for completion
         for thread in threads:
             thread.join()
-        
+
         # Step 5: Force garbage collection
         gc.collect()
-        
+
         # Step 6: Get final memory usage
         final_memory = process.memory_info().rss / 1024 / 1024  # MB
         memory_increase = final_memory - initial_memory
-        
+
         # Step 7: Verify results
         assert all(results)
-        
+
         # Step 8: Verify memory usage
         assert memory_increase < 100  # Should increase by < 100MB
 
     def test_memory_cleanup_after_operations(self, temp_lazarus_dir, test_database):
         """Test memory cleanup after operations"""
-        import psutil
         import gc
-        
+
+        import psutil
+
         # Step 1: Get initial memory usage
         process = psutil.Process()
         initial_memory = process.memory_info().rss / 1024 / 1024  # MB
-        
+
         # Step 2: Perform operations
         for i in range(100):
             user_id = test_database.create_user(
@@ -553,23 +552,23 @@ class TestMemoryUsage:
                 api_key=f"test_api_key_{i}"
             )
             user = test_database.get_user(user_id)
-        
+
         # Step 3: Force garbage collection
         gc.collect()
-        
+
         # Step 4: Get memory after operations
         memory_after_ops = process.memory_info().rss / 1024 / 1024  # MB
-        
+
         # Step 5: Close database
         test_database.close()
-        
+
         # Step 6: Force garbage collection again
         gc.collect()
-        
+
         # Step 7: Get final memory usage
         final_memory = process.memory_info().rss / 1024 / 1024  # MB
         memory_increase = final_memory - initial_memory
-        
+
         # Step 8: Verify memory cleanup
         assert memory_increase < 50  # Should increase by < 50MB after cleanup
 
@@ -582,18 +581,18 @@ class TestResponseTimeBenchmarks:
         # Step 1: Perform multiple verifications
         num_iterations = 100
         response_times = []
-        
+
         for i in range(num_iterations):
             start_time = time.time()
             result = verify_api_key(test_api_key)
             duration = (time.time() - start_time) * 1000  # ms
             response_times.append(duration)
-        
+
         # Step 2: Calculate statistics
         avg_time = sum(response_times) / len(response_times)
         max_time = max(response_times)
         min_time = min(response_times)
-        
+
         # Step 3: Verify performance
         assert avg_time < 10  # Average < 10ms
         assert max_time < 50  # Max < 50ms
@@ -608,22 +607,22 @@ class TestResponseTimeBenchmarks:
             password_hash="hashed_password_123",
             api_key="test_api_key_12345678901234567890"
         )
-        
+
         # Step 2: Perform multiple queries
         num_iterations = 100
         response_times = []
-        
+
         for i in range(num_iterations):
             start_time = time.time()
             user = test_database.get_user(user_id)
             duration = (time.time() - start_time) * 1000  # ms
             response_times.append(duration)
-        
+
         # Step 3: Calculate statistics
         avg_time = sum(response_times) / len(response_times)
         max_time = max(response_times)
         min_time = min(response_times)
-        
+
         # Step 4: Verify performance
         assert avg_time < 20  # Average < 20ms
         assert max_time < 100  # Max < 100ms
@@ -632,16 +631,16 @@ class TestResponseTimeBenchmarks:
     def test_file_encryption_response_time(self, temp_lazarus_dir):
         """Test file encryption response time"""
         from core.encryption import encrypt_file
-        
+
         # Step 1: Create test file
         test_file = temp_lazarus_dir / "test_file.txt"
         test_content = b"Test content for encryption " * 1000  # ~20KB
         test_file.write_bytes(test_content)
-        
+
         # Step 2: Perform multiple encryptions
         num_iterations = 50
         response_times = []
-        
+
         for i in range(num_iterations):
             encrypted_file = temp_lazarus_dir / f"encrypted_{i}.bin"
             start_time = time.time()
@@ -652,12 +651,12 @@ class TestResponseTimeBenchmarks:
             )
             duration = (time.time() - start_time) * 1000  # ms
             response_times.append(duration)
-        
+
         # Step 3: Calculate statistics
         avg_time = sum(response_times) / len(response_times)
         max_time = max(response_times)
         min_time = min(response_times)
-        
+
         # Step 4: Verify performance
         assert avg_time < 100  # Average < 100ms
         assert max_time < 500  # Max < 500ms
@@ -673,10 +672,10 @@ class TestLoadTesting:
         duration_seconds = 10
         operations_per_second = 10
         total_operations = duration_seconds * operations_per_second
-        
+
         results = []
         start_time = time.time()
-        
+
         for i in range(total_operations):
             # Perform operation
             user_id = test_database.create_user(
@@ -686,17 +685,17 @@ class TestLoadTesting:
                 api_key=f"test_api_key_{i}"
             )
             results.append(user_id is not None)
-            
+
             # Sleep to maintain rate
             elapsed = time.time() - start_time
             target_time = (i + 1) / operations_per_second
             if elapsed < target_time:
                 time.sleep(target_time - elapsed)
-        
+
         # Step 2: Verify results
         assert all(results)
         assert len(results) == total_operations
-        
+
         # Step 3: Verify timing
         actual_duration = time.time() - start_time
         assert actual_duration < duration_seconds + 2  # Allow 2s margin
@@ -706,7 +705,7 @@ class TestLoadTesting:
         # Step 1: Perform burst of operations
         burst_size = 100
         results = []
-        
+
         start_time = time.time()
         for i in range(burst_size):
             user_id = test_database.create_user(
@@ -717,11 +716,11 @@ class TestLoadTesting:
             )
             results.append(user_id is not None)
         duration = time.time() - start_time
-        
+
         # Step 2: Verify results
         assert all(results)
         assert len(results) == burst_size
-        
+
         # Step 3: Verify performance
         assert duration < 20.0  # Should complete in < 20 seconds
         ops_per_second = burst_size / duration

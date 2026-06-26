@@ -10,29 +10,26 @@ Tests for:
 - Migration system
 """
 
-import pytest
 import sqlite3
-import threading
 import tempfile
+import threading
 from pathlib import Path
-from datetime import datetime, timedelta
 
+import pytest
+
+from core.config import (
+    BeneficiaryConfig,
+    LazarusConfig,
+    VaultConfig,
+)
 from core.database import (
-    DatabaseManager,
     DatabaseConfig,
+    DatabaseManager,
     get_database_manager,
 )
-from core.config import (
-    LazarusConfig,
-    BeneficiaryConfig,
-    VaultConfig,
-    StorageProviderConfig,
-)
 from core.migrations import (
-    MigrationManager,
     MIGRATIONS,
-    get_migration_manager,
-    run_migrations,
+    MigrationManager,
     get_migration_status,
 )
 
@@ -102,13 +99,13 @@ class TestDatabaseInitialization:
         """Test all tables are created"""
         with db.get_connection() as conn:
             cursor = conn.cursor()
-            
+
             # Check tables exist
             tables = [
                 'users', 'configurations', 'vaults', 'events',
                 'documents', 'rate_limits'
             ]
-            
+
             for table in tables:
                 cursor.execute(
                     f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table}'"
@@ -120,18 +117,18 @@ class TestDatabaseInitialization:
         """Test indexes are created"""
         with db.get_connection() as conn:
             cursor = conn.cursor()
-            
+
             # Check indexes exist
             cursor.execute("SELECT name FROM sqlite_master WHERE type='index'")
             indexes = [row[0] for row in cursor.fetchall()]
-            
+
             expected_indexes = [
                 'idx_events_config',
                 'idx_documents_config',
                 'idx_rate_limits_identifier',
                 'idx_configurations_user'
             ]
-            
+
             for index in expected_indexes:
                 assert index in indexes, f"Index {index} not created"
 
@@ -162,9 +159,9 @@ class TestUserOperations:
             sample_user_data["api_key"],
             sample_user_data["owner_name"]
         )
-        
+
         assert user_id > 0
-        
+
         # Verify user was created
         user = db.get_user_by_email(sample_user_data["email"])
         assert user is not None
@@ -179,7 +176,7 @@ class TestUserOperations:
             sample_user_data["api_key"],
             sample_user_data["owner_name"]
         )
-        
+
         user = db.get_user_by_email(sample_user_data["email"])
         assert user is not None
         assert user["email"] == sample_user_data["email"]
@@ -191,7 +188,7 @@ class TestUserOperations:
             sample_user_data["api_key"],
             sample_user_data["owner_name"]
         )
-        
+
         user = db.get_user_by_api_key(sample_user_data["api_key"])
         assert user is not None
         assert user["api_key"] == sample_user_data["api_key"]
@@ -208,11 +205,11 @@ class TestUserOperations:
             sample_user_data["api_key"],
             sample_user_data["owner_name"]
         )
-        
+
         # Update user
         success = db.update_user(user_id, {"owner_name": "Updated Name"})
         assert success is True
-        
+
         # Verify update
         user = db.get_user_by_email(sample_user_data["email"])
         assert user["owner_name"] == "Updated Name"
@@ -224,7 +221,7 @@ class TestUserOperations:
             sample_user_data["api_key"],
             sample_user_data["owner_name"]
         )
-        
+
         # Try to create duplicate user
         with pytest.raises(sqlite3.IntegrityError):
             db.create_user(
@@ -240,7 +237,7 @@ class TestUserOperations:
             sample_user_data["api_key"],
             sample_user_data["owner_name"]
         )
-        
+
         # Try to create duplicate API key
         with pytest.raises(sqlite3.IntegrityError):
             db.create_user(
@@ -260,10 +257,10 @@ class TestConfigurationOperations:
             sample_user_data["api_key"],
             sample_user_data["owner_name"]
         )
-        
+
         config_id = db.create_configuration(user_id, sample_config_data)
         assert config_id > 0
-        
+
         # Verify configuration was created
         config = db.get_configuration(config_id)
         assert config is not None
@@ -277,10 +274,10 @@ class TestConfigurationOperations:
             sample_user_data["api_key"],
             sample_user_data["owner_name"]
         )
-        
+
         config_id = db.create_configuration(user_id, sample_config_data)
         config = db.get_configuration(config_id)
-        
+
         assert config is not None
         assert config.owner_email == sample_config_data.owner_email
         assert config.beneficiary.name == sample_config_data.beneficiary.name
@@ -298,13 +295,13 @@ class TestConfigurationOperations:
             sample_user_data["api_key"],
             sample_user_data["owner_name"]
         )
-        
+
         config_id = db.create_configuration(user_id, sample_config_data)
-        
+
         # Update configuration
         success = db.update_configuration(config_id, {"armed": False})
         assert success is True
-        
+
         # Verify update
         config = db.get_configuration(config_id)
         assert config.armed is False
@@ -316,11 +313,11 @@ class TestConfigurationOperations:
             sample_user_data["api_key"],
             sample_user_data["owner_name"]
         )
-        
+
         # Create multiple configurations
         config1_id = db.create_configuration(user_id, sample_config_data)
         config2_id = db.create_configuration(user_id, sample_config_data)
-        
+
         configs = db.get_user_configurations(user_id)
         assert len(configs) == 2
         assert any(c["id"] == config1_id for c in configs)
@@ -338,7 +335,7 @@ class TestEventOperations:
             sample_user_data["owner_name"]
         )
         config_id = db.create_configuration(user_id, sample_config_data)
-        
+
         event_id = db.log_event(config_id, "TEST_EVENT", "Test event content")
         assert event_id > 0
 
@@ -350,12 +347,12 @@ class TestEventOperations:
             sample_user_data["owner_name"]
         )
         config_id = db.create_configuration(user_id, sample_config_data)
-        
+
         # Log multiple events
         db.log_event(config_id, "EVENT_1", "Content 1")
         db.log_event(config_id, "EVENT_2", "Content 2")
         db.log_event(config_id, "EVENT_3", "Content 3")
-        
+
         # Get events
         events = db.get_events(config_id, limit=10)
         assert len(events) == 3
@@ -369,11 +366,11 @@ class TestEventOperations:
             sample_user_data["owner_name"]
         )
         config_id = db.create_configuration(user_id, sample_config_data)
-        
+
         # Log multiple events
         for i in range(10):
             db.log_event(config_id, f"EVENT_{i}", f"Content {i}")
-        
+
         # Get limited events
         events = db.get_events(config_id, limit=5)
         assert len(events) == 5
@@ -390,7 +387,7 @@ class TestDocumentOperations:
             sample_user_data["owner_name"]
         )
         config_id = db.create_configuration(user_id, sample_config_data)
-        
+
         document = {
             "filename": "test.txt",
             "file_type": "text/plain",
@@ -398,7 +395,7 @@ class TestDocumentOperations:
             "storage_provider": "local",
             "encrypted_path": "/path/to/encrypted.txt"
         }
-        
+
         doc_id = db.add_document(config_id, document)
         assert doc_id > 0
 
@@ -410,7 +407,7 @@ class TestDocumentOperations:
             sample_user_data["owner_name"]
         )
         config_id = db.create_configuration(user_id, sample_config_data)
-        
+
         # Add multiple documents
         doc1 = {
             "filename": "doc1.txt",
@@ -427,10 +424,10 @@ class TestDocumentOperations:
             "encrypted_path": "/path/to/doc2.pdf",
             "cid": "QmTestCID"
         }
-        
+
         db.add_document(config_id, doc1)
         db.add_document(config_id, doc2)
-        
+
         # Get documents
         documents = db.get_documents(config_id)
         assert len(documents) == 2
@@ -445,7 +442,7 @@ class TestDocumentOperations:
             sample_user_data["owner_name"]
         )
         config_id = db.create_configuration(user_id, sample_config_data)
-        
+
         document = {
             "filename": "test.txt",
             "file_type": "text/plain",
@@ -453,13 +450,13 @@ class TestDocumentOperations:
             "storage_provider": "local",
             "encrypted_path": "/path/to/encrypted.txt"
         }
-        
+
         doc_id = db.add_document(config_id, document)
-        
+
         # Remove document
         success = db.remove_document(doc_id)
         assert success is True
-        
+
         # Verify removal
         documents = db.get_documents(config_id)
         assert len(documents) == 0
@@ -480,18 +477,18 @@ class TestTransactionSupport:
                 "INSERT INTO users (email, api_key, owner_name) VALUES (?, ?, ?)",
                 ("test2@example.com", "key2", "User 2")
             )
-        
+
         # Verify both users were created
         user1 = db.get_user_by_email("test1@example.com")
         user2 = db.get_user_by_email("test2@example.com")
-        
+
         assert user1 is not None
         assert user2 is not None
 
     def test_transaction_rollback(self, db, sample_user_data):
         """Test transaction rolls back on error"""
         initial_count = len(db.get_user_configurations(1)) if db.get_user_by_api_key(sample_user_data["api_key"]) else 0
-        
+
         try:
             with db.transaction() as conn:
                 cursor = conn.cursor()
@@ -506,7 +503,7 @@ class TestTransactionSupport:
                 )
         except sqlite3.IntegrityError:
             pass  # Expected to fail
-        
+
         # Verify no users were created
         user1 = db.get_user_by_email("test1@example.com")
         assert user1 is None
@@ -518,11 +515,11 @@ class TestTransactionSupport:
             sample_user_data["api_key"],
             sample_user_data["owner_name"]
         )
-        
+
         try:
             with db.transaction() as conn:
                 cursor = conn.cursor()
-                
+
                 # Create configuration
                 cursor.execute(
                     """
@@ -533,7 +530,7 @@ class TestTransactionSupport:
                     """,
                     (user_id, "owner@example.com", "Beneficiary", "beneficiary@example.com", "/path/to/key.pem", 30)
                 )
-                
+
                 # This will fail
                 cursor.execute(
                     "INSERT INTO users (email, api_key, owner_name) VALUES (?, ?, ?)",
@@ -541,7 +538,7 @@ class TestTransactionSupport:
                 )
         except sqlite3.IntegrityError:
             pass  # Expected to fail
-        
+
         # Verify configuration was not created
         configs = db.get_user_configurations(user_id)
         assert len(configs) == 0
@@ -553,21 +550,21 @@ class TestConnectionPooling:
     def test_connection_pooling(self, db):
         """Test connection pooling works"""
         thread_ids = set()
-        
+
         def get_connection():
             with db.get_connection() as conn:
                 thread_ids.add(threading.current_thread().ident)
-        
+
         # Get connections from multiple threads
         threads = []
         for _ in range(5):
             thread = threading.Thread(target=get_connection)
             threads.append(thread)
             thread.start()
-        
+
         for thread in threads:
             thread.join()
-        
+
         # Verify connections were created for different threads
         assert len(thread_ids) >= 1
 
@@ -575,7 +572,7 @@ class TestConnectionPooling:
         """Test thread-safe database operations"""
         user_ids = []
         errors = []
-        
+
         def create_user(index):
             try:
                 user_id = db.create_user(
@@ -586,20 +583,20 @@ class TestConnectionPooling:
                 user_ids.append(user_id)
             except Exception as e:
                 errors.append(e)
-        
+
         # Create users from multiple threads
         threads = []
         for i in range(10):
             thread = threading.Thread(target=create_user, args=(i,))
             threads.append(thread)
             thread.start()
-        
+
         for thread in threads:
             thread.join()
-        
+
         # Verify no errors
         assert len(errors) == 0, f"Errors occurred: {errors}"
-        
+
         # Verify all users were created
         assert len(user_ids) == 10
         assert len(set(user_ids)) == 10  # All unique
@@ -616,7 +613,7 @@ class TestBackupAndRecovery:
             sample_user_data["api_key"],
             sample_user_data["owner_name"]
         )
-        
+
         # Create backup
         backup_path = db.backup()
         assert backup_path.exists()
@@ -626,11 +623,11 @@ class TestBackupAndRecovery:
         """Test old backups are cleaned up"""
         # Set low max_backups for testing
         db.config.max_backups = 3
-        
+
         # Create multiple backups
         for _ in range(5):
             db.backup()
-        
+
         # Count backups
         backups = list(db.config.path.parent.glob("backup_*.db"))
         assert len(backups) <= 3
@@ -643,24 +640,24 @@ class TestBackupAndRecovery:
             sample_user_data["api_key"],
             sample_user_data["owner_name"]
         )
-        
+
         # Create backup
         backup_path = db.backup()
-        
+
         # Delete user
         with db.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("DELETE FROM users WHERE email = ?", (sample_user_data["email"],))
             conn.commit()
-        
+
         # Verify user is gone
         user = db.get_user_by_email(sample_user_data["email"])
         assert user is None
-        
+
         # Restore from backup
         success = db.restore(backup_path)
         assert success is True
-        
+
         # Verify user is restored
         user = db.get_user_by_email(sample_user_data["email"])
         assert user is not None
@@ -677,9 +674,9 @@ class TestDatabaseStatistics:
             sample_user_data["api_key"],
             sample_user_data["owner_name"]
         )
-        
+
         stats = db.get_stats()
-        
+
         assert "database_size" in stats
         assert "database_path" in stats
         assert "tables" in stats
@@ -705,11 +702,11 @@ class TestGlobalDatabaseManager:
         # Reset global instance
         import core.database
         core.database._database_manager = None
-        
+
         config = DatabaseConfig(path=temp_db_path)
         manager1 = get_database_manager(config)
         manager2 = get_database_manager()
-        
+
         # Should be same instance
         assert manager1 is manager2
 
@@ -742,12 +739,12 @@ class TestMigrationSystem:
     def test_apply_migration(self, db):
         """Test applying a migration"""
         manager = MigrationManager(db)
-        
+
         # Apply migration 2 (user preferences table)
         migration = MIGRATIONS[1]  # version 2
         success = manager.apply_migration(migration)
         assert success is True
-        
+
         # Verify migration was applied
         applied = manager.get_applied_migrations()
         assert 2 in applied
@@ -755,15 +752,15 @@ class TestMigrationSystem:
     def test_rollback_migration(self, db):
         """Test rolling back a migration"""
         manager = MigrationManager(db)
-        
+
         # Apply migration 2
         migration = MIGRATIONS[1]  # version 2
         manager.apply_migration(migration)
-        
+
         # Rollback migration
         success = manager.rollback_migration(migration)
         assert success is True
-        
+
         # Verify migration was rolled back
         applied = manager.get_applied_migrations()
         assert 2 not in applied
@@ -777,7 +774,7 @@ class TestMigrationSystem:
     def test_get_migration_status(self, db):
         """Test getting migration status"""
         status = get_migration_status(db)
-        
+
         assert "current_version" in status
         assert "latest_version" in status
         assert "up_to_date" in status

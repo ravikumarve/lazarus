@@ -22,13 +22,13 @@ import os
 from pathlib import Path
 from typing import Union
 
+from cryptography.exceptions import InvalidTag
+from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import rsa, padding as asym_padding
+from cryptography.hazmat.primitives.asymmetric import padding as asym_padding
+from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-from cryptography.hazmat.backends import default_backend
-from cryptography.exceptions import InvalidTag
-
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -118,12 +118,12 @@ def _verify_memory_zeroed(buf: Union[bytearray, memoryview]) -> bool:
     """
     if not isinstance(buf, (bytearray, memoryview)):
         return False
-    
+
     # Check all bytes are zero
     for byte in buf:
         if byte != 0:
             return False
-    
+
     return True
 
 
@@ -148,7 +148,7 @@ def _secure_delete(buf: Union[bytearray, memoryview], passes: int = 3) -> None:
         raise ValueError("Cannot delete empty buffer")
 
     length = len(buf)
-    
+
     # Multiple passes with different patterns
     for pass_num in range(passes):
         if pass_num == 0:
@@ -160,16 +160,16 @@ def _secure_delete(buf: Union[bytearray, memoryview], passes: int = 3) -> None:
         else:
             # Pass 3+: Random data
             pattern = None
-        
+
         for i in range(length):
             if pattern is None:
                 buf[i] = os.urandom(1)[0]
             else:
                 buf[i] = pattern
-    
+
     # Final pass: Zero out
     _zero_memory(buf)
-    
+
     # Verify memory is zeroed
     if not _verify_memory_zeroed(buf):
         raise RuntimeError("Failed to verify memory zeroing")
@@ -377,7 +377,7 @@ def encrypt_and_store_file(
         (encrypted_file_path, key_blob_base64, ipfs_cid)
         ipfs_cid will be None if IPFS upload is disabled or fails.
     """
-    from core.storage import upload_to_ipfs_with_fallback, StorageConfig
+    from core.storage import StorageConfig, upload_to_ipfs_with_fallback
 
     # First, encrypt the file locally
     encrypted_path, key_blob_b64 = encrypt_file(
@@ -550,20 +550,20 @@ def encrypt_data(data: Union[str, bytes], key: bytes) -> bytes:
     """
     if len(key) != 32:
         raise ValueError(f"Key must be 32 bytes, got {len(key)}")
-    
+
     # Convert string to bytes if necessary
     if isinstance(data, str):
         data_bytes = data.encode('utf-8')
     else:
         data_bytes = data
-    
+
     # Generate nonce
     nonce = os.urandom(12)
-    
+
     # Encrypt using AES-GCM
     aesgcm = AESGCM(key)
     ciphertext = aesgcm.encrypt(nonce, data_bytes, associated_data=None)
-    
+
     # Return nonce + ciphertext (which includes the GCM tag)
     return nonce + ciphertext
 
@@ -584,16 +584,16 @@ def decrypt_data(encrypted_data: bytes, key: bytes) -> bytes:
     """
     if len(key) != 32:
         raise ValueError(f"Key must be 32 bytes, got {len(key)}")
-    
+
     if len(encrypted_data) < 28:  # 12 bytes nonce + 16 bytes tag + at least 1 byte ciphertext
         raise ValueError("Encrypted data too short")
-    
+
     # Extract nonce and ciphertext (includes GCM tag at the end)
     nonce = encrypted_data[:12]
     ciphertext = encrypted_data[12:]
-    
+
     # Decrypt using AES-GCM
     aesgcm = AESGCM(key)
     plaintext = aesgcm.decrypt(nonce, ciphertext, associated_data=None)
-    
+
     return plaintext

@@ -2,7 +2,7 @@
 
 import os
 import sys
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pytest
 
@@ -10,21 +10,17 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from core.license import (
-    validate_license,
-    check_subscription_status,
-    get_wallet_limit,
-    verify_wallet_count,
-    is_license_expired,
-    clear_license_cache,
-    get_cache_stats,
-    LicenseValidationResult,
-    SubscriptionTier,
     InvalidLicenseError,
     NetworkError,
-    SubscriptionExpiredError,
+    SubscriptionTier,
     WalletLimitExceededError,
+    check_subscription_status,
+    clear_license_cache,
+    get_cache_stats,
+    get_wallet_limit,
+    validate_license,
+    verify_wallet_count,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

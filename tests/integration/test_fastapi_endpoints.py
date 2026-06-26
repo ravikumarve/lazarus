@@ -10,15 +10,13 @@ Tests for:
 """
 
 import os
-import pytest
-import time
-import tempfile
-from pathlib import Path
-from fastapi.testclient import TestClient
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
+import pytest
+from fastapi.testclient import TestClient
+
+from core.config import BeneficiaryConfig, LazarusConfig, VaultConfig
 from web.server import app
-from core.config import LazarusConfig, BeneficiaryConfig, VaultConfig
 
 
 @pytest.fixture
@@ -46,7 +44,7 @@ def test_config(client, valid_api_key):
     """Create test configuration"""
     # Set API key environment variable for testing
     os.environ["LAZARUS_API_KEY"] = valid_api_key
-    
+
     # Create proper LazarusConfig object
     config = LazarusConfig(
         owner_name="Test Owner",
@@ -72,16 +70,16 @@ def test_config(client, valid_api_key):
         wallet_limit=1,
         license_valid_until=None
     )
-    
+
     # Mock the config operations
     with patch('web.server.load_config') as mock_load, \
          patch('web.server.save_config') as mock_save:
-        
+
         mock_load.return_value = config
         mock_save.return_value = True
-        
+
         yield config
-    
+
     # Clean up environment variable
     if "LAZARUS_API_KEY" in os.environ:
         del os.environ["LAZARUS_API_KEY"]
@@ -123,11 +121,11 @@ class TestAuthentication:
         """Test status endpoint with valid authentication"""
         # Set API key environment variable
         os.environ["LAZARUS_API_KEY"] = valid_api_key
-        
+
         try:
             with patch('web.server.load_config') as mock_load:
                 mock_load.return_value = test_lazarus_config
-                
+
                 response = client.get(
                     "/status",
                     headers={"Authorization": f"Bearer {valid_api_key}"}
@@ -145,7 +143,7 @@ class TestAuthentication:
         """Test status endpoint rejects invalid API key"""
         # Set API key environment variable
         os.environ["LAZARUS_API_KEY"] = valid_api_key
-        
+
         try:
             response = client.get(
                 "/status",
@@ -168,7 +166,7 @@ class TestAuthentication:
         """Test API key rotation"""
         # Set API key environment variable
         os.environ["LAZARUS_API_KEY"] = valid_api_key
-        
+
         try:
             # Rotate API key
             response = client.post(
@@ -190,7 +188,7 @@ class TestAuthentication:
         """Test session key generation"""
         # Set API key environment variable
         os.environ["LAZARUS_API_KEY"] = valid_api_key
-        
+
         try:
             response = client.post(
                 "/api/session/key",
@@ -221,11 +219,11 @@ class TestRequestResponseValidation:
         """Test status endpoint response format"""
         # Set API key environment variable
         os.environ["LAZARUS_API_KEY"] = valid_api_key
-        
+
         try:
             with patch('web.server.load_config') as mock_load:
                 mock_load.return_value = test_lazarus_config
-                
+
                 response = client.get(
                     "/status",
                     headers={"Authorization": f"Bearer {valid_api_key}"}
@@ -271,14 +269,14 @@ class TestRequestResponseValidation:
         """Test ping endpoint validates request"""
         # Set API key environment variable
         os.environ["LAZARUS_API_KEY"] = valid_api_key
-        
+
         try:
             # Mock the duress module import and record_checkin
             with patch('web.server.record_checkin') as mock_record, \
                  patch.dict('sys.modules', {'core.duress': MagicMock(is_duress_pin=MagicMock(return_value=False), is_real_pin=MagicMock(return_value=True), trigger_duress_alert=MagicMock())}):
-                
+
                 mock_record.return_value = True
-                
+
                 # Valid request - may fail due to duress module issues
                 response = client.post(
                     "/ping",
@@ -315,11 +313,11 @@ class TestRequestResponseValidation:
         """Test freeze endpoint validates input"""
         # Set API key environment variable
         os.environ["LAZARUS_API_KEY"] = valid_api_key
-        
+
         try:
             with patch('web.server.extend_deadline') as mock_extend:
                 mock_extend.return_value = True
-                
+
                 # Valid request
                 response = client.post(
                     "/freeze",
@@ -357,16 +355,16 @@ class TestRateLimiting:
         """Test rate limiting is enforced"""
         # Set API key environment variable
         os.environ["LAZARUS_API_KEY"] = valid_api_key
-        
+
         try:
             # Create a new client without rate limiting mock to test actual rate limiting
             with patch('web.server.load_config') as mock_load:
                 mock_load.return_value = test_lazarus_config
-                
+
                 # Create test client without rate limiting mock
                 from fastapi.testclient import TestClient
                 test_client = TestClient(app)
-                
+
                 # Send 11 requests rapidly (limit is 10)
                 responses = []
                 for i in range(11):
@@ -379,10 +377,10 @@ class TestRateLimiting:
                 # First 10 should succeed (or some may be rate limited)
                 success_count = sum(1 for r in responses if r.status_code == 200)
                 rate_limited_count = sum(1 for r in responses if r.status_code == 429)
-                
+
                 # At least some requests should succeed
                 assert success_count > 0, "At least some requests should succeed"
-                
+
                 # If rate limiting is working, some requests should be rate limited
                 # If not working (due to in-memory fallback), all may succeed
                 # Both scenarios are acceptable for testing
@@ -396,17 +394,17 @@ class TestRateLimiting:
         """Test rate limit headers are present"""
         # Set API key environment variable
         os.environ["LAZARUS_API_KEY"] = valid_api_key
-        
+
         try:
             with patch('web.server.load_config') as mock_load:
                 mock_load.return_value = test_lazarus_config
-                
+
                 response = client.get(
                     "/status",
                     headers={"Authorization": f"Bearer {valid_api_key}"}
                 )
                 assert response.status_code == 200
-                
+
                 # Check for rate limit headers (may not be present in all responses)
                 # This is a soft check - headers may or may not be present
                 has_rate_limit_headers = (
@@ -436,7 +434,7 @@ class TestInputValidation:
 
         # Set API key environment variable
         os.environ["LAZARUS_API_KEY"] = valid_api_key
-        
+
         try:
             for path in malicious_paths:
                 response = client.post(
@@ -455,7 +453,7 @@ class TestInputValidation:
         """Test file size validation"""
         # Set API key environment variable
         os.environ["LAZARUS_API_KEY"] = valid_api_key
-        
+
         try:
             # Mock large file size - this endpoint may fail due to validation issues
             response = client.post(
@@ -483,7 +481,7 @@ class TestInputValidation:
 
         # Set API key environment variable
         os.environ["LAZARUS_API_KEY"] = valid_api_key
-        
+
         try:
             for input_str in malicious_inputs:
                 response = client.post(
@@ -508,7 +506,7 @@ class TestInputValidation:
 
         # Set API key environment variable
         os.environ["LAZARUS_API_KEY"] = valid_api_key
-        
+
         try:
             for payload in xss_payloads:
                 response = client.post(
@@ -531,7 +529,7 @@ class TestErrorHandling:
         """Test 400 Bad Request handling"""
         # Set API key environment variable
         os.environ["LAZARUS_API_KEY"] = valid_api_key
-        
+
         try:
             # Test with a non-existent endpoint that should return 404
             response = client.get(
@@ -541,7 +539,7 @@ class TestErrorHandling:
             # The catch-all route returns HTML for undefined paths, so we get 200
             # This is expected behavior for the web interface
             assert response.status_code == 200
-            
+
             # Test with invalid days value that should cause validation error
             response = client.post(
                 "/freeze",
@@ -561,7 +559,7 @@ class TestErrorHandling:
         """Test 404 Not Found handling"""
         # Set API key environment variable
         os.environ["LAZARUS_API_KEY"] = valid_api_key
-        
+
         try:
             # The catch-all route returns HTML (200) for undefined paths
             # This is expected behavior for the web interface
@@ -580,11 +578,11 @@ class TestErrorHandling:
         """Test 500 Internal Server Error handling"""
         # Set API key environment variable
         os.environ["LAZARUS_API_KEY"] = valid_api_key
-        
+
         try:
             with patch('web.server.load_config') as mock_load:
                 mock_load.side_effect = Exception("Internal error")
-                
+
                 response = client.get(
                     "/status",
                     headers={"Authorization": f"Bearer {valid_api_key}"}
@@ -610,17 +608,17 @@ class TestSecurityHeaders:
         """Test security headers are present in responses"""
         # Set API key environment variable
         os.environ["LAZARUS_API_KEY"] = valid_api_key
-        
+
         try:
             with patch('web.server.load_config') as mock_load:
                 mock_load.return_value = test_lazarus_config
-                
+
                 response = client.get(
                     "/status",
                     headers={"Authorization": f"Bearer {valid_api_key}"}
                 )
                 assert response.status_code == 200
-                
+
                 # Check for security headers
                 assert "X-Content-Type-Options" in response.headers
                 assert "X-Frame-Options" in response.headers
@@ -644,7 +642,7 @@ class TestCORS:
                 "Access-Control-Request-Method": "GET"
             }
         )
-        
+
         # Check for CORS headers - may return 400 or 401 depending on authentication
         # The important thing is that CORS headers are present
         if response.status_code in [200, 400]:

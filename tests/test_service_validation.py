@@ -5,8 +5,8 @@ Or standalone: python tests/test_service_validation.py
 """
 
 import os
-import sys
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest

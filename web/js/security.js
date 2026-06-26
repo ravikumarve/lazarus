@@ -29,6 +29,10 @@ class LazarusSecurity {
         this.initialize();
     }
     
+    // -----------------------------------------------------------------------
+    // Initialization
+    // -----------------------------------------------------------------------
+    
     /**
      * Initialize security module
      */
@@ -37,8 +41,6 @@ class LazarusSecurity {
         this.startActivityMonitoring();
         this.startTokenRefresh();
         this.enforceHTTPS();
-        
-        // Initialize server-provided encryption key
         await this.initializeServerEncryptionKey();
     }
     
@@ -47,7 +49,7 @@ class LazarusSecurity {
      */
     async initializeServerEncryptionKey() {
         try {
-            const sessionId = this.generateSessionId();
+            const sessionId = _generateSessionId();
             const userAgent = navigator.userAgent;
             
             const response = await fetch(`${this.config.apiBase}/api/session/key`, {
@@ -56,10 +58,7 @@ class LazarusSecurity {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${this.authToken || ''}`
                 },
-                body: JSON.stringify({
-                    session_id: sessionId,
-                    user_agent: userAgent
-                })
+                body: JSON.stringify({ session_id: sessionId, user_agent: userAgent })
             });
             
             if (response.ok) {
@@ -67,40 +66,15 @@ class LazarusSecurity {
                 this.sessionKeyId = data.key_id;
                 this.encryptionKey = data.key;
                 this.keyExpiry = new Date(data.expires_at);
-                
-                // Store key metadata (not the actual key) for session tracking
                 localStorage.setItem('lazarus_session_key_id', this.sessionKeyId);
                 localStorage.setItem('lazarus_key_expiry', this.keyExpiry.toISOString());
-                
-                console.log('Server-provided encryption key initialized');
             } else {
-                console.warn('Failed to get server encryption key, using fallback');
-                this.encryptionKey = this.generateFallbackKey();
+                this.encryptionKey = _generateFallbackKey();
             }
         } catch (error) {
             console.error('Error initializing server encryption key:', error);
-            this.encryptionKey = this.generateFallbackKey();
+            this.encryptionKey = _generateFallbackKey();
         }
-    }
-    
-    /**
-     * Generate unique session ID
-     */
-    generateSessionId() {
-        const timestamp = Date.now().toString(36);
-        const randomPart = Array.from(crypto.getRandomValues(new Uint8Array(16)))
-            .map(b => b.toString(16).padStart(2, '0'))
-            .join('');
-        return `${timestamp}-${randomPart}`;
-    }
-    
-    /**
-     * Generate fallback encryption key (only used if server key fails)
-     */
-    generateFallbackKey() {
-        const array = new Uint8Array(32);
-        crypto.getRandomValues(array);
-        return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
     }
     
     /**
@@ -683,6 +657,30 @@ class LazarusSecurity {
     getAuthToken() {
         return this.authToken;
     }
+}
+
+// -----------------------------------------------------------------------
+// Standalone utility functions (extracted from class to reduce method count)
+// -----------------------------------------------------------------------
+
+/**
+ * Generate unique session ID
+ */
+function _generateSessionId() {
+    const timestamp = Date.now().toString(36);
+    const randomPart = Array.from(crypto.getRandomValues(new Uint8Array(16)))
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+    return `${timestamp}-${randomPart}`;
+}
+
+/**
+ * Generate fallback encryption key (only used if server key fails)
+ */
+function _generateFallbackKey() {
+    const array = new Uint8Array(32);
+    crypto.getRandomValues(array);
+    return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
 // Export for use in other modules

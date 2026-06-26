@@ -37,15 +37,13 @@ Environment variables:
 
 from __future__ import annotations
 
-import io
 import logging
 import os
 import shutil
 import time
-import math
-from pathlib import Path
-from typing import Optional, List, Dict, Any
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -190,6 +188,41 @@ def _get_file_size(file_path: Path) -> int:
 # ---------------------------------------------------------------------------
 
 
+def _try_provider_upload(
+    file_path: Path,
+    config: StorageConfig,
+    provider_name: str,
+    upload_fn: Callable[[], str],
+    is_available: Callable[[StorageConfig], bool],
+    unavailable_msg: str,
+    errors: List[str],
+    file_size: int,
+    start_time: float,
+) -> Optional[UploadResult]:
+    """Attempt upload via a single provider. Returns UploadResult or None on failure."""
+    if not is_available(config):
+        errors.append(unavailable_msg)
+        return None
+    try:
+        cid = _retry_with_backoff(
+            upload_fn,
+            max_retries=config.max_retries,
+            timeout=config.timeout,
+        )
+        duration = time.time() - start_time
+        return UploadResult(
+            cid=cid,
+            provider=provider_name,
+            size_bytes=file_size,
+            duration_seconds=duration,
+            gateway_urls=_get_gateway_urls(cid, config),
+        )
+    except Exception as exc:
+        logger.debug("%s upload failed: %s", provider_name, exc)
+        errors.append(f"{provider_name}: {exc}")
+        return None
+
+
 def upload_to_ipfs(
     file_path: Path, config: Optional[StorageConfig] = None
 ) -> UploadResult:
@@ -217,77 +250,24 @@ def upload_to_ipfs(
     config = config or _get_default_config()
     file_size = _get_file_size(file_path)
     start_time = time.time()
-
     errors: List[str] = []
 
-    # 1. Local IPFS node (fastest, no API keys)
-    if ipfs_available(config):
-        try:
-            cid = _retry_with_backoff(
-                lambda: _upload_via_local_node(file_path, config),
-                max_retries=config.max_retries,
-                timeout=config.timeout,
-            )
-            duration = time.time() - start_time
+    providers = [
+        ("local_ipfs", lambda: _upload_via_local_node(file_path, config),
+         ipfs_available, "local_ipfs: node unavailable"),
+        ("pinata", lambda: _upload_via_pinata(file_path, config),
+         pinata_configured, "pinata: not configured"),
+        ("web3_storage", lambda: _upload_via_web3_storage(file_path, config),
+         web3_storage_configured, "web3_storage: not configured"),
+    ]
 
-            return UploadResult(
-                cid=cid,
-                provider="local_ipfs",
-                size_bytes=file_size,
-                duration_seconds=duration,
-                gateway_urls=_get_gateway_urls(cid, config),
-            )
-        except Exception as exc:
-            logger.debug("Local IPFS upload failed: %s", exc)
-            errors.append(f"local_ipfs: {exc}")
-    else:
-        errors.append("local_ipfs: node unavailable")
-
-    # 2. Pinata (cloud pinning service)
-    if pinata_configured(config):
-        try:
-            cid = _retry_with_backoff(
-                lambda: _upload_via_pinata(file_path, config),
-                max_retries=config.max_retries,
-                timeout=config.timeout,
-            )
-            duration = time.time() - start_time
-
-            return UploadResult(
-                cid=cid,
-                provider="pinata",
-                size_bytes=file_size,
-                duration_seconds=duration,
-                gateway_urls=_get_gateway_urls(cid, config),
-            )
-        except Exception as exc:
-            logger.debug("Pinata upload failed: %s", exc)
-            errors.append(f"pinata: {exc}")
-    else:
-        errors.append("pinata: not configured")
-
-    # 3. Web3.Storage (decentralized alternative)
-    if web3_storage_configured(config):
-        try:
-            cid = _retry_with_backoff(
-                lambda: _upload_via_web3_storage(file_path, config),
-                max_retries=config.max_retries,
-                timeout=config.timeout,
-            )
-            duration = time.time() - start_time
-
-            return UploadResult(
-                cid=cid,
-                provider="web3_storage",
-                size_bytes=file_size,
-                duration_seconds=duration,
-                gateway_urls=_get_gateway_urls(cid, config),
-            )
-        except Exception as exc:
-            logger.debug("Web3.Storage upload failed: %s", exc)
-            errors.append(f"web3_storage: {exc}")
-    else:
-        errors.append("web3_storage: not configured")
+    for provider_name, upload_fn, is_available_fn, unavailable_msg in providers:
+        result = _try_provider_upload(
+            file_path, config, provider_name, upload_fn,
+            is_available_fn, unavailable_msg, errors, file_size, start_time,
+        )
+        if result is not None:
+            return result
 
     raise StorageError(
         f"All IPFS upload methods failed for {file_path.name} ({file_size:,} bytes):\n  "
@@ -510,7 +490,6 @@ def download_from_ipfs(
         StorageError: if all gateways fail.
         CIDValidationError: if CID format is invalid.
     """
-    import requests
 
     if not _validate_cid(cid):
         raise CIDValidationError(f"Invalid CID format: {cid}")
@@ -906,8 +885,9 @@ def add_document_to_bundle(file_path: str, document_type: str = "OTHER") -> dict
     Add a document to the bundle.
     Returns information about the added document.
     """
-    from core.config import LAZARUS_DIR
     import shutil
+
+    from core.config import LAZARUS_DIR
 
     source_path = Path(file_path)
     if not source_path.exists():
@@ -966,14 +946,22 @@ def send_email(
         Dictionary with send status and message ID
     """
     import os
+
     from sendgrid import SendGridAPIClient
-    from sendgrid.helpers.mail import Mail, Attachment, FileContent, FileName, FileType, Disposition
-    
+    from sendgrid.helpers.mail import (
+        Attachment,
+        Disposition,
+        FileContent,
+        FileName,
+        FileType,
+        Mail,
+    )
+
     api_key = os.environ.get("SENDGRID_API_KEY")
     if not api_key:
         logger.error("SENDGRID_API_KEY not configured")
         return {"success": False, "error": "SendGrid not configured"}
-    
+
     try:
         message = Mail(
             from_email="noreply@lazarusprotocol.com",
@@ -981,11 +969,11 @@ def send_email(
             subject=subject,
             plain_text_content=body
         )
-        
+
         if html_body:
             message.template_id = None  # Clear template if using custom HTML
             # For simplicity, we'll use plain text in this implementation
-        
+
         # Add attachments if provided
         if attachments:
             for attachment_path in attachments:
@@ -998,17 +986,17 @@ def send_email(
                         FileType(f"application/{file_type}"),
                         Disposition('attachment')
                     )
-        
+
         sg = SendGridAPIClient(api_key)
         response = sg.send(message)
-        
+
         logger.info(f"Email sent to {to}: {response.status_code}")
         return {
             "success": True,
             "status_code": response.status_code,
             "message_id": response.headers.get('X-Message-Id')
         }
-        
+
     except Exception as e:
         logger.error(f"Failed to send email: {e}")
         return {"success": False, "error": str(e)}
@@ -1035,33 +1023,34 @@ def send_telegram_message(
         Dictionary with send status
     """
     import os
+
     import requests
-    
+
     bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
     if not bot_token:
         logger.error("TELEGRAM_BOT_TOKEN not configured")
         return {"success": False, "error": "Telegram not configured"}
-    
+
     try:
         url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
         payload = {
             "chat_id": chat_id,
             "text": message
         }
-        
+
         if parse_mode:
             payload["parse_mode"] = parse_mode
-        
+
         response = requests.post(url, json=payload, timeout=30)
         response.raise_for_status()
-        
+
         logger.info(f"Telegram message sent to {chat_id}")
         return {
             "success": True,
             "status_code": response.status_code,
             "result": response.json()
         }
-        
+
     except Exception as e:
         logger.error(f"Failed to send Telegram message: {e}")
         return {"success": False, "error": str(e)}
@@ -1083,43 +1072,44 @@ def pin_to_pinata(file_path: Path, config: Optional[StorageConfig] = None) -> Di
         Dictionary with pin status and CID
     """
     import os
+
     import requests
-    
+
     if config is None:
         config = _get_default_config()
-    
+
     api_key = config.pinata_api_key or os.environ.get("PINATA_API_KEY")
     secret_key = config.pinata_secret_key or os.environ.get("PINATA_SECRET_KEY")
-    
+
     if not api_key or not secret_key:
         logger.error("Pinata credentials not configured")
         return {"success": False, "error": "Pinata not configured"}
-    
+
     try:
         url = "https://api.pinata.cloud/pinning/pinFileToIPFS"
-        
+
         headers = {
             "pinata_api_key": api_key,
             "pinata_secret_api_key": secret_key
         }
-        
+
         files = {
             "file": (file_path.name, open(file_path, "rb"))
         }
-        
+
         response = requests.post(url, files=files, headers=headers, timeout=config.timeout)
         response.raise_for_status()
-        
+
         result = response.json()
         cid = result.get("IpfsHash")
-        
+
         logger.info(f"File pinned to Pinata: {cid}")
         return {
             "success": True,
             "cid": cid,
             "status_code": response.status_code
         }
-        
+
     except Exception as e:
         logger.error(f"Failed to pin to Pinata: {e}")
         return {"success": False, "error": str(e)}

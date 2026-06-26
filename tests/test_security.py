@@ -17,27 +17,24 @@ from unittest.mock import Mock, patch
 import pytest
 from fastapi import HTTPException
 
-from core.security import (
-    get_api_key,
-    verify_api_key,
-    RateLimiter,
-    validate_email,
-    validate_safe_path,
-    validate_file_size,
-    sanitize_input,
-    validate_filename,
-    get_security_headers,
-    log_security_event,
-    security,
-)
 from core.encryption import (
-    _zero_memory,
-    _verify_memory_zeroed,
-    _secure_delete,
     _force_memory_barrier,
+    _secure_delete,
+    _verify_memory_zeroed,
+    _zero_memory,
     generate_aes_key,
 )
-
+from core.security import (
+    RateLimiter,
+    get_api_key,
+    get_security_headers,
+    sanitize_input,
+    validate_email,
+    validate_file_size,
+    validate_filename,
+    validate_safe_path,
+    verify_api_key,
+)
 
 # ---------------------------------------------------------------------------
 # API Key Authentication Tests
@@ -125,7 +122,7 @@ def test_rate_limiter_exceeds_limit():
     limiter = RateLimiter(requests=3, window=60)
     for _ in range(3):
         limiter.is_allowed("127.0.0.1")
-    
+
     # Next request should be blocked
     allowed, retry_after = limiter.is_allowed("127.0.0.1")
     assert allowed is False
@@ -136,15 +133,15 @@ def test_rate_limiter_exceeds_limit():
 def test_rate_limiter_different_ips():
     """Test rate limiting is per IP."""
     limiter = RateLimiter(requests=2, window=60)
-    
+
     # IP 1 makes 2 requests
     limiter.is_allowed("127.0.0.1")
     limiter.is_allowed("127.0.0.1")
-    
+
     # IP 1 should be blocked
     allowed, _ = limiter.is_allowed("127.0.0.1")
     assert allowed is False
-    
+
     # IP 2 should still be allowed
     allowed, _ = limiter.is_allowed("192.168.1.1")
     assert allowed is True
@@ -153,18 +150,18 @@ def test_rate_limiter_different_ips():
 def test_rate_limiter_window_expiry():
     """Test old requests expire after window."""
     limiter = RateLimiter(requests=2, window=1)
-    
+
     # Make 2 requests
     limiter.is_allowed("127.0.0.1")
     limiter.is_allowed("127.0.0.1")
-    
+
     # Should be blocked
     allowed, _ = limiter.is_allowed("127.0.0.1")
     assert allowed is False
-    
+
     # Wait for window to expire
     time.sleep(1.1)
-    
+
     # Should be allowed again
     allowed, _ = limiter.is_allowed("127.0.0.1")
     assert allowed is True
@@ -173,16 +170,16 @@ def test_rate_limiter_window_expiry():
 def test_rate_limiter_cleanup():
     """Test cleanup removes old entries."""
     limiter = RateLimiter(requests=2, window=1)
-    
+
     # Add requests for multiple IPs
     limiter.is_allowed("127.0.0.1")
     limiter.is_allowed("192.168.1.1")
-    
+
     assert len(limiter._requests) == 2
-    
+
     # Wait for window to expire
     time.sleep(1.1)
-    
+
     # Cleanup should remove old entries
     limiter.cleanup()
     assert len(limiter._requests) == 0
@@ -230,7 +227,7 @@ def test_validate_safe_path_valid():
     # Create test directory if it doesn't exist
     test_dir = home / ".lazarus"
     test_dir.mkdir(parents=True, exist_ok=True)
-    
+
     valid_paths = [
         home / ".lazarus" / "config.json",
         test_dir / "test.txt",
@@ -261,7 +258,7 @@ def test_validate_file_size_valid():
     with tempfile.NamedTemporaryFile(delete=False) as f:
         f.write(b"x" * 1000)
         temp_path = Path(f.name)
-    
+
     try:
         validate_file_size(temp_path, max_size=1024 * 1024)  # 1MB
     finally:
@@ -274,7 +271,7 @@ def test_validate_file_size_too_large():
     with tempfile.NamedTemporaryFile(delete=False) as f:
         f.write(b"x" * (200 * 1024 * 1024))  # 200MB
         temp_path = Path(f.name)
-    
+
     try:
         with pytest.raises(ValueError, match="File too large"):
             validate_file_size(temp_path, max_size=100 * 1024 * 1024)  # 100MB
@@ -429,13 +426,13 @@ def test_security_headers_in_response():
     """Test security headers are added to responses."""
     from fastapi import FastAPI, Request
     from fastapi.testclient import TestClient
-    
+
     app = FastAPI()
-    
+
     @app.get("/test")
     async def test_endpoint():
         return {"status": "ok"}
-    
+
     # Add security middleware
     @app.middleware("http")
     async def security_middleware(request: Request, call_next):
@@ -443,22 +440,22 @@ def test_security_headers_in_response():
         for key, value in get_security_headers().items():
             response.headers[key] = value
         return response
-    
+
     client = TestClient(app)
     response = client.get("/test")
-    
+
     assert "X-Content-Type-Options" in response.headers
     assert "X-Frame-Options" in response.headers
 
 
 def test_rate_limiting_integration():
     """Test rate limiting in FastAPI app."""
-    from fastapi import FastAPI, Request, HTTPException
+    from fastapi import FastAPI, HTTPException, Request
     from fastapi.testclient import TestClient
-    
+
     app = FastAPI()
     limiter = RateLimiter(requests=2, window=60)
-    
+
     @app.get("/test")
     async def test_endpoint(request: Request):
         ip = request.client.host if request.client else "unknown"
@@ -466,16 +463,16 @@ def test_rate_limiting_integration():
         if not allowed:
             raise HTTPException(status_code=429, detail="Rate limit exceeded")
         return {"status": "ok"}
-    
+
     client = TestClient(app)
-    
+
     # First 2 requests should succeed
     response1 = client.get("/test")
     assert response1.status_code == 200
-    
+
     response2 = client.get("/test")
     assert response2.status_code == 200
-    
+
     # Third request should be rate limited
     response3 = client.get("/test")
     assert response3.status_code == 429

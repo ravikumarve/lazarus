@@ -16,26 +16,21 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import shutil
 import sqlite3
 import threading
-import time
 from contextlib import contextmanager
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, List, Dict, Any, Generator
+from typing import Any, Dict, Generator, List, Optional
 
 from core.config import (
-    LazarusConfig,
     BeneficiaryConfig,
-    VaultConfig,
+    LazarusConfig,
     StorageProviderConfig,
-    _config_to_dict,
-    _config_from_dict,
+    VaultConfig,
 )
-
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -87,13 +82,13 @@ class DatabaseManager:
         self._connection_pool: Dict[int, sqlite3.Connection] = {}
         self._lock = threading.RLock()
         self._logger = logging.getLogger("lazarus.database")
-        
+
         # Ensure database directory exists
         self.config.path.parent.mkdir(parents=True, exist_ok=True)
-        
+
         # Initialize database schema
         self._ensure_schema()
-        
+
         self._logger.info(f"Database initialized: {self.config.path}")
 
     @contextmanager
@@ -105,13 +100,13 @@ class DatabaseManager:
             SQLite connection with row factory enabled
         """
         thread_id = threading.current_thread().ident
-        
+
         with self._lock:
             if thread_id not in self._connection_pool:
                 self._connection_pool[thread_id] = self._create_connection()
-            
+
             conn = self._connection_pool[thread_id]
-        
+
         try:
             yield conn
         except Exception:
@@ -126,141 +121,167 @@ class DatabaseManager:
             timeout=30.0
         )
         conn.row_factory = sqlite3.Row
-        
+
         # Enable WAL mode for better concurrency
         if self.config.enable_wal_mode:
             conn.execute("PRAGMA journal_mode=WAL")
-        
+
         # Enable foreign key constraints
         if self.config.enable_foreign_keys:
             conn.execute("PRAGMA foreign_keys=ON")
-        
+
         # Set busy timeout for concurrent access
         conn.execute("PRAGMA busy_timeout=5000")
-        
+
         return conn
 
     def _ensure_schema(self) -> None:
         """Ensure database schema exists"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            
-            # Users table
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS users (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    email TEXT UNIQUE NOT NULL,
-                    api_key TEXT UNIQUE NOT NULL,
-                    owner_name TEXT NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-            
-            # Configurations table
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS configurations (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id INTEGER NOT NULL,
-                    owner_email TEXT NOT NULL,
-                    beneficiary_name TEXT NOT NULL,
-                    beneficiary_email TEXT NOT NULL,
-                    beneficiary_public_key_path TEXT NOT NULL,
-                    check_in_interval_days INTEGER NOT NULL,
-                    last_checkin_timestamp TIMESTAMP,
-                    deadline_timestamp TIMESTAMP,
-                    armed BOOLEAN DEFAULT 1,
-                    telegram_chat_id TEXT,
-                    license_key TEXT,
-                    subscription_tier TEXT DEFAULT 'free',
-                    wallet_limit INTEGER DEFAULT 1,
-                    license_valid_until TIMESTAMP,
-                    storage_config TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-                )
-            """)
-            
-            # Vault metadata table
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS vaults (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    configuration_id INTEGER NOT NULL,
-                    secret_file_path TEXT NOT NULL,
-                    encrypted_file_path TEXT NOT NULL,
-                    key_blob TEXT NOT NULL,
-                    ipfs_cid TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (configuration_id) REFERENCES configurations(id) ON DELETE CASCADE
-                )
-            """)
-            
-            # Events table
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS events (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    configuration_id INTEGER NOT NULL,
-                    event_type TEXT NOT NULL,
-                    content TEXT NOT NULL,
-                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (configuration_id) REFERENCES configurations(id) ON DELETE CASCADE
-                )
-            """)
-            
-            # Documents table
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS documents (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    configuration_id INTEGER NOT NULL,
-                    filename TEXT NOT NULL,
-                    file_type TEXT NOT NULL,
-                    file_size INTEGER NOT NULL,
-                    storage_provider TEXT NOT NULL,
-                    cid TEXT,
-                    encrypted_path TEXT NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (configuration_id) REFERENCES configurations(id) ON DELETE CASCADE
-                )
-            """)
-            
-            # Security events table
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS security_events (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id INTEGER,
-                    event_type TEXT NOT NULL,
-                    ip_address TEXT,
-                    user_agent TEXT,
-                    details TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
-                )
-            """)
-            
-            # Rate limits table (for persistence)
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS rate_limits (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    identifier TEXT NOT NULL,
-                    request_count INTEGER NOT NULL,
-                    window_start TIMESTAMP NOT NULL,
-                    backoff_until TIMESTAMP,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE(identifier, window_start)
-                )
-            """)
-            
-            # Create indexes for performance
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_events_config ON events(configuration_id)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_documents_config ON documents(configuration_id)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_rate_limits_identifier ON rate_limits(identifier)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_configurations_user ON configurations(user_id)")
-            
+            self._create_all_tables(cursor)
+            self._create_schema_indexes(cursor)
             conn.commit()
-            
             self._logger.info("Database schema ensured")
+
+    def _create_all_tables(self, cursor) -> None:
+        """Create all required database tables"""
+        self._create_users_table(cursor)
+        self._create_configurations_table(cursor)
+        self._create_vaults_table(cursor)
+        self._create_events_table(cursor)
+        self._create_documents_table(cursor)
+        self._create_security_events_table(cursor)
+        self._create_rate_limits_table(cursor)
+
+    @staticmethod
+    def _create_users_table(cursor) -> None:
+        """Create users table"""
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT UNIQUE NOT NULL,
+                api_key TEXT UNIQUE NOT NULL,
+                owner_name TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+    @staticmethod
+    def _create_configurations_table(cursor) -> None:
+        """Create configurations table"""
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS configurations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                owner_email TEXT NOT NULL,
+                beneficiary_name TEXT NOT NULL,
+                beneficiary_email TEXT NOT NULL,
+                beneficiary_public_key_path TEXT NOT NULL,
+                check_in_interval_days INTEGER NOT NULL,
+                last_checkin_timestamp TIMESTAMP,
+                deadline_timestamp TIMESTAMP,
+                armed BOOLEAN DEFAULT 1,
+                telegram_chat_id TEXT,
+                license_key TEXT,
+                subscription_tier TEXT DEFAULT 'free',
+                wallet_limit INTEGER DEFAULT 1,
+                license_valid_until TIMESTAMP,
+                storage_config TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+        """)
+
+    @staticmethod
+    def _create_vaults_table(cursor) -> None:
+        """Create vaults table"""
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS vaults (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                configuration_id INTEGER NOT NULL,
+                secret_file_path TEXT NOT NULL,
+                encrypted_file_path TEXT NOT NULL,
+                key_blob TEXT NOT NULL,
+                ipfs_cid TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (configuration_id) REFERENCES configurations(id) ON DELETE CASCADE
+            )
+        """)
+
+    @staticmethod
+    def _create_events_table(cursor) -> None:
+        """Create events table"""
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                configuration_id INTEGER NOT NULL,
+                event_type TEXT NOT NULL,
+                content TEXT NOT NULL,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (configuration_id) REFERENCES configurations(id) ON DELETE CASCADE
+            )
+        """)
+
+    @staticmethod
+    def _create_documents_table(cursor) -> None:
+        """Create documents table"""
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS documents (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                configuration_id INTEGER NOT NULL,
+                filename TEXT NOT NULL,
+                file_type TEXT NOT NULL,
+                file_size INTEGER NOT NULL,
+                storage_provider TEXT NOT NULL,
+                cid TEXT,
+                encrypted_path TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (configuration_id) REFERENCES configurations(id) ON DELETE CASCADE
+            )
+        """)
+
+    @staticmethod
+    def _create_security_events_table(cursor) -> None:
+        """Create security events table"""
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS security_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                event_type TEXT NOT NULL,
+                ip_address TEXT,
+                user_agent TEXT,
+                details TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+            )
+        """)
+
+    @staticmethod
+    def _create_rate_limits_table(cursor) -> None:
+        """Create rate limits table"""
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS rate_limits (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                identifier TEXT NOT NULL,
+                request_count INTEGER NOT NULL,
+                window_start TIMESTAMP NOT NULL,
+                backoff_until TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(identifier, window_start)
+            )
+        """)
+
+    @staticmethod
+    def _create_schema_indexes(cursor) -> None:
+        """Create indexes for performance"""
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_events_config ON events(configuration_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_documents_config ON documents(configuration_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_rate_limits_identifier ON rate_limits(identifier)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_configurations_user ON configurations(user_id)")
 
     @contextmanager
     def transaction(self) -> Generator[sqlite3.Connection, None, None]:
@@ -298,7 +319,7 @@ class DatabaseManager:
         """
         # Use username as owner_name if provided, otherwise use owner_name, otherwise use email
         final_owner_name = username or owner_name or email.split('@')[0]
-        
+
         with self.transaction() as conn:
             cursor = conn.cursor()
             cursor.execute(
@@ -333,7 +354,7 @@ class DatabaseManager:
                 (email,)
             )
             row = cursor.fetchone()
-            
+
             if row:
                 return {
                     "id": row[0],
@@ -366,7 +387,7 @@ class DatabaseManager:
                 (user_id,)
             )
             row = cursor.fetchone()
-            
+
             if row:
                 return {
                     "id": row[0],
@@ -399,7 +420,7 @@ class DatabaseManager:
                 (api_key,)
             )
             row = cursor.fetchone()
-            
+
             if row:
                 return {
                     "id": row[0],
@@ -424,25 +445,25 @@ class DatabaseManager:
         """
         with self.transaction() as conn:
             cursor = conn.cursor()
-            
+
             set_clauses = []
             values = []
-            
+
             for key, value in updates.items():
                 if key in ['email', 'api_key', 'owner_name']:
                     set_clauses.append(f"{key} = ?")
                     values.append(value)
-            
+
             if not set_clauses:
                 return False
-            
+
             values.append(user_id)
-            
+
             cursor.execute(
                 f"UPDATE users SET {', '.join(set_clauses)}, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
                 values
             )
-            
+
             success = cursor.rowcount > 0
             if success:
                 self._logger.info(f"Updated user: {user_id}")
@@ -461,10 +482,10 @@ class DatabaseManager:
         """
         with self.transaction() as conn:
             cursor = conn.cursor()
-            
+
             # Serialize storage config
             storage_config_json = json.dumps(asdict(config.storage_config)) if config.storage_config else None
-            
+
             cursor.execute(
                 """
                 INSERT INTO configurations (
@@ -492,9 +513,9 @@ class DatabaseManager:
                     storage_config_json
                 )
             )
-            
+
             config_id = cursor.lastrowid
-            
+
             # Create vault entry
             cursor.execute(
                 """
@@ -511,7 +532,7 @@ class DatabaseManager:
                     config.vault.ipfs_cid
                 )
             )
-            
+
             self._logger.info(f"Created configuration {config_id} for user {user_id}")
             return config_id
 
@@ -534,10 +555,10 @@ class DatabaseManager:
                 (config_id,)
             )
             config_row = cursor.fetchone()
-            
+
             if not config_row:
                 return None
-            
+
             # Get vault
             cursor.execute(
                 """
@@ -546,15 +567,15 @@ class DatabaseManager:
                 (config_id,)
             )
             vault_row = cursor.fetchone()
-            
+
             # Reconstruct configuration
             config_dict = dict(config_row)
-            
+
             # Parse storage config
             storage_config = None
             if config_dict['storage_config']:
                 storage_config = StorageProviderConfig(**json.loads(config_dict['storage_config']))
-            
+
             # Parse vault
             vault = VaultConfig(
                 secret_file_path=vault_row['secret_file_path'],
@@ -562,23 +583,23 @@ class DatabaseManager:
                 key_blob=vault_row['key_blob'],
                 ipfs_cid=vault_row['ipfs_cid']
             )
-            
+
             # Parse beneficiary
             beneficiary = BeneficiaryConfig(
                 name=config_dict['beneficiary_name'],
                 email=config_dict['beneficiary_email'],
                 public_key_path=config_dict['beneficiary_public_key_path']
             )
-            
+
             # Convert timestamps
             last_checkin = config_dict['last_checkin_timestamp']
             if last_checkin:
                 last_checkin = last_checkin.timestamp()
-            
+
             license_valid = config_dict['license_valid_until']
             if license_valid:
                 license_valid = license_valid.timestamp()
-            
+
             return LazarusConfig(
                 owner_name=config_dict['owner_email'],  # Using email as name for now
                 owner_email=config_dict['owner_email'],
@@ -608,10 +629,10 @@ class DatabaseManager:
         """
         with self.transaction() as conn:
             cursor = conn.cursor()
-            
+
             set_clauses = []
             values = []
-            
+
             for key, value in updates.items():
                 if key in ['owner_email', 'beneficiary_name', 'beneficiary_email',
                           'beneficiary_public_key_path', 'check_in_interval_days',
@@ -628,17 +649,17 @@ class DatabaseManager:
                 elif key == 'storage_config' and value is not None:
                     set_clauses.append("storage_config = ?")
                     values.append(json.dumps(asdict(value)))
-            
+
             if not set_clauses:
                 return False
-            
+
             values.append(config_id)
-            
+
             cursor.execute(
                 f"UPDATE configurations SET {', '.join(set_clauses)}, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
                 values
             )
-            
+
             success = cursor.rowcount > 0
             if success:
                 self._logger.info(f"Updated configuration: {config_id}")
@@ -816,19 +837,19 @@ class DatabaseManager:
         """
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         backup_path = self.config.path.parent / f"backup_{timestamp}.db"
-        
+
         # Close all connections before backup
         with self._lock:
             for conn in self._connection_pool.values():
                 conn.close()
             self._connection_pool.clear()
-        
+
         # Copy database file
         shutil.copy2(self.config.path, backup_path)
-        
+
         # Clean up old backups
         self._cleanup_old_backups()
-        
+
         self._logger.info(f"Created backup: {backup_path}")
         return backup_path
 
@@ -839,7 +860,7 @@ class DatabaseManager:
             key=lambda p: p.stat().st_mtime,
             reverse=True
         )
-        
+
         for backup in backups[self.config.max_backups:]:
             backup.unlink()
             self._logger.debug(f"Removed old backup: {backup}")
@@ -857,16 +878,16 @@ class DatabaseManager:
         if not backup_path.exists():
             self._logger.error(f"Backup file not found: {backup_path}")
             return False
-        
+
         # Close all connections
         with self._lock:
             for conn in self._connection_pool.values():
                 conn.close()
             self._connection_pool.clear()
-        
+
         # Restore from backup
         shutil.copy2(backup_path, self.config.path)
-        
+
         self._logger.info(f"Restored from backup: {backup_path}")
         return True
 
@@ -883,19 +904,19 @@ class DatabaseManager:
         """
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            
+
             stats = {
                 "database_size": self.config.path.stat().st_size,
                 "database_path": str(self.config.path),
                 "tables": {}
             }
-            
+
             # Get table counts
             tables = ['users', 'configurations', 'vaults', 'events', 'documents', 'rate_limits']
             for table in tables:
                 cursor.execute(f"SELECT COUNT(*) FROM {table}")
                 stats["tables"][table] = cursor.fetchone()[0]
-            
+
             return stats
 
     def vacuum(self) -> None:
@@ -935,10 +956,10 @@ class DatabaseManager:
         """
         with self.transaction() as conn:
             cursor = conn.cursor()
-            
+
             # Serialize details
             details_json = json.dumps(details) if details else None
-            
+
             cursor.execute(
                 """
                 INSERT INTO security_events (user_id, event_type, ip_address, user_agent, details)
@@ -946,7 +967,7 @@ class DatabaseManager:
                 """,
                 (user_id, event_type, ip_address, user_agent, details_json)
             )
-            
+
             event_id = cursor.lastrowid
             self._logger.info(f"Logged security event: {event_type} (ID: {event_id})")
             return event_id
@@ -979,7 +1000,7 @@ class DatabaseManager:
                 (user_id, limit)
             )
             rows = cursor.fetchall()
-            
+
             events = []
             for row in rows:
                 events.append({
@@ -991,7 +1012,7 @@ class DatabaseManager:
                     "details": json.loads(row[5]) if row[5] else None,
                     "created_at": row[6]
                 })
-            
+
             return events
 
     def close(self) -> None:
@@ -1025,8 +1046,8 @@ def get_database_manager(config: Optional[DatabaseConfig] = None) -> DatabaseMan
         DatabaseManager instance
     """
     global _database_manager
-    
+
     if _database_manager is None:
         _database_manager = DatabaseManager(config)
-    
+
     return _database_manager

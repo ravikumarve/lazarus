@@ -9,10 +9,10 @@ Comprehensive end-to-end tests for blockchain functionality including:
 - Multi-signature wallet support
 """
 
-import pytest
 import time
-from datetime import datetime, UTC, timedelta
 from decimal import Decimal
+
+import pytest
 
 # Skip all tests if web3 is not installed
 try:
@@ -27,24 +27,14 @@ pytestmark = pytest.mark.skipif(
 )
 
 from core.blockchain import (
-    BlockchainManager,
     BlockchainConfig,
-    WalletConfig,
-    Transaction,
-    InheritanceRule,
-    WalletType,
-    TransactionStatus,
+    BlockchainManager,
     InheritanceTrigger,
-    get_blockchain_manager
+    Transaction,
+    TransactionStatus,
+    WalletType,
 )
-
-from core.hardware_wallet import (
-    HardwareWalletManager,
-    HardwareWalletType,
-    HardwareWalletStatus,
-    get_hardware_wallet_manager
-)
-
+from core.hardware_wallet import HardwareWalletManager
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -94,10 +84,10 @@ class TestWalletManagementE2E:
         wallet1 = blockchain_manager.create_wallet(label="Wallet 1")
         wallet2 = blockchain_manager.create_wallet(label="Wallet 2")
         wallet3 = blockchain_manager.create_wallet(label="Wallet 3")
-        
+
         # List wallets
         wallets = blockchain_manager.list_wallets()
-        
+
         # Verify all wallets are present
         assert len(wallets) >= 3
         assert any(w.address == wallet1.address for w in wallets)
@@ -108,7 +98,7 @@ class TestWalletManagementE2E:
         """Test getting wallet by address"""
         # Get wallet
         retrieved_wallet = blockchain_manager.get_wallet(test_wallet.address)
-        
+
         # Verify wallet details
         assert retrieved_wallet is not None
         assert retrieved_wallet.address == test_wallet.address
@@ -122,13 +112,13 @@ class TestWalletManagementE2E:
         account = Account.create()
         private_key = account.key.hex()
         expected_address = account.address
-        
+
         # Import wallet
         imported_wallet = blockchain_manager.import_wallet(
             private_key=private_key,
             label="Imported Wallet"
         )
-        
+
         # Verify imported wallet
         assert imported_wallet.address.lower() == expected_address.lower()
         assert imported_wallet.label == "Imported Wallet"
@@ -138,13 +128,13 @@ class TestWalletManagementE2E:
         """Test syncing wallet balances"""
         # Create wallet
         wallet = blockchain_manager.create_wallet()
-        
+
         # Sync wallets
         blockchain_manager.sync_wallets()
-        
+
         # Get balance
         balance = blockchain_manager.get_balance(wallet.address)
-        
+
         # Verify balance is retrieved
         assert balance is not None
         assert balance >= 0
@@ -154,7 +144,7 @@ class TestWalletManagementE2E:
         # Valid addresses
         valid_address = "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
         assert blockchain_manager.validate_address(valid_address) is True
-        
+
         # Invalid addresses
         invalid_address = "0xinvalid"
         assert blockchain_manager.validate_address(invalid_address) is False
@@ -171,11 +161,11 @@ class TestTransactionE2E:
         """Test sending a transaction"""
         # Note: This test requires actual ETH on testnet
         # For testing purposes, we'll just verify the transaction creation
-        
+
         # Get private key (in real implementation, this would be securely stored)
         from eth_account import Account
         account = Account.from_key(test_wallet.address)  # Placeholder
-        
+
         # Create transaction (would fail without actual ETH)
         try:
             transaction = blockchain_manager.send_transaction(
@@ -185,14 +175,14 @@ class TestTransactionE2E:
                 private_key=account.key.hex(),
                 gas_limit=21000
             )
-            
+
             # Verify transaction created
             assert transaction is not None
             assert transaction.from_address == test_wallet.address
             assert transaction.to_address == beneficiary_wallet.address
             assert transaction.value == Decimal("0.001")
             assert transaction.status == TransactionStatus.PENDING
-            
+
         except Exception as e:
             # Expected to fail without actual ETH
             assert "insufficient funds" in str(e).lower() or "balance" in str(e).lower()
@@ -201,10 +191,10 @@ class TestTransactionE2E:
         """Test getting transaction by hash"""
         # Use a known transaction hash from testnet
         test_tx_hash = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
-        
+
         # Get transaction
         transaction = blockchain_manager.get_transaction(test_tx_hash)
-        
+
         # Transaction may not exist on testnet
         # Just verify the method works
         assert transaction is None or isinstance(transaction, Transaction)
@@ -217,7 +207,7 @@ class TestTransactionE2E:
             to_address=beneficiary_wallet.address,
             value=Decimal("0.001")
         )
-        
+
         # Verify gas estimate
         assert gas_estimate is not None
         assert gas_estimate > 0
@@ -226,10 +216,10 @@ class TestTransactionE2E:
     def test_get_block_explorer_url(self, blockchain_manager):
         """Test getting block explorer URL"""
         test_tx_hash = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
-        
+
         # Get block explorer URL
         url = blockchain_manager.get_block_explorer_url(test_tx_hash)
-        
+
         # Verify URL
         assert url is not None
         assert test_tx_hash in url
@@ -239,7 +229,7 @@ class TestTransactionE2E:
         """Test getting network information"""
         # Get network info
         info = blockchain_manager.get_network_info()
-        
+
         # Verify network info
         assert info is not None
         assert 'network' in info
@@ -264,7 +254,7 @@ class TestInheritanceE2E:
             trigger_type=InheritanceTrigger.CHECKIN_MISSED,
             trigger_value="30"  # 30 days
         )
-        
+
         # Verify rule created
         assert rule is not None
         assert rule.wallet_address == test_wallet.address
@@ -282,19 +272,19 @@ class TestInheritanceE2E:
             trigger_type=InheritanceTrigger.TIME_BASED,
             trigger_value="365"
         )
-        
+
         rule2 = blockchain_manager.create_inheritance_rule(
             wallet_address=test_wallet.address,
             beneficiary_address=beneficiary_wallet.address,
             trigger_type=InheritanceTrigger.MANUAL
         )
-        
+
         # Get all rules
         all_rules = blockchain_manager.get_inheritance_rules()
-        
+
         # Get rules for specific wallet
         wallet_rules = blockchain_manager.get_inheritance_rules(test_wallet.address)
-        
+
         # Verify rules
         assert len(all_rules) >= 2
         assert len(wallet_rules) >= 2
@@ -307,10 +297,10 @@ class TestInheritanceE2E:
             beneficiary_address=beneficiary_wallet.address,
             trigger_type=InheritanceTrigger.MANUAL
         )
-        
+
         # Check triggers
         triggered_rules = blockchain_manager.check_inheritance_triggers()
-        
+
         # Verify manual trigger is detected
         assert rule in triggered_rules
 
@@ -323,10 +313,10 @@ class TestInheritanceE2E:
             trigger_type=InheritanceTrigger.TIME_BASED,
             trigger_value="1"  # 1 day for testing
         )
-        
+
         # Check if trigger should fire (should be False for recent creation)
         should_trigger = blockchain_manager._should_trigger_inheritance(rule)
-        
+
         # Verify trigger not fired yet
         assert should_trigger is False
 
@@ -338,22 +328,22 @@ class TestInheritanceE2E:
             beneficiary_address=beneficiary_wallet.address,
             trigger_type=InheritanceTrigger.MANUAL
         )
-        
+
         # Note: This would require actual ETH and private key
         # For testing, we'll just verify the method exists
         try:
             from eth_account import Account
             account = Account.from_key(test_wallet.address)  # Placeholder
-            
+
             transaction = blockchain_manager.execute_inheritance(
                 rule=rule,
                 private_key=account.key.hex()
             )
-            
+
             # Transaction would fail without actual ETH
             assert transaction is None or isinstance(transaction, Transaction)
-            
-        except Exception as e:
+
+        except Exception:
             # Expected to fail without actual ETH
             assert True
 
@@ -369,7 +359,7 @@ class TestHardwareWalletE2E:
         """Test detecting hardware wallet devices"""
         # Detect devices
         devices = hardware_wallet_manager.detect_devices()
-        
+
         # Verify devices list (may be empty if no devices connected)
         assert isinstance(devices, list)
 
@@ -377,14 +367,14 @@ class TestHardwareWalletE2E:
         """Test connecting to Ledger device"""
         # Note: This requires actual Ledger device
         # For testing, we'll just verify the method exists
-        
+
         try:
             info = hardware_wallet_manager.connect_ledger()
-            
+
             # May return None if no device connected
             assert info is None or isinstance(info, type)
-            
-        except Exception as e:
+
+        except Exception:
             # Expected if no device connected
             assert True
 
@@ -392,14 +382,14 @@ class TestHardwareWalletE2E:
         """Test connecting to Trezor device"""
         # Note: This requires actual Trezor device
         # For testing, we'll just verify the method exists
-        
+
         try:
             info = hardware_wallet_manager.connect_trezor()
-            
+
             # May return None if no device connected
             assert info is None or isinstance(info, type)
-            
-        except Exception as e:
+
+        except Exception:
             # Expected if no device connected
             assert True
 
@@ -407,7 +397,7 @@ class TestHardwareWalletE2E:
         """Test getting connected wallets"""
         # Get connected wallets
         wallets = hardware_wallet_manager.get_connected_wallets()
-        
+
         # Verify wallets list
         assert isinstance(wallets, list)
 
@@ -415,7 +405,7 @@ class TestHardwareWalletE2E:
         """Test checking if wallet is connected"""
         # Check connection for non-existent wallet
         is_connected = hardware_wallet_manager.is_connected("0x1234567890abcdef")
-        
+
         # Should return False
         assert is_connected is False
 
@@ -435,13 +425,13 @@ class TestMultisigE2E:
             "0x842d35Cc6634C0532925a3b844Bc9e7595f0bEc",
             "0x942d35Cc6634C0532925a3b844Bc9e7595f0bEd"
         ]
-        
+
         # Create 2-of-3 multisig wallet
         multisig_address = blockchain_manager.create_multisig_wallet(
             addresses=addresses,
             required_signatures=2
         )
-        
+
         # Verify multisig wallet created
         assert multisig_address is not None
         assert multisig_address.startswith("0x")
@@ -453,13 +443,13 @@ class TestMultisigE2E:
             "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb",
             "0x842d35Cc6634C0532925a3b844Bc9e7595f0bEc"
         ]
-        
+
         # Try to create 3-of-2 multisig wallet (invalid)
         multisig_address = blockchain_manager.create_multisig_wallet(
             addresses=addresses,
             required_signatures=3
         )
-        
+
         # Should return None
         assert multisig_address is None
 
@@ -476,17 +466,17 @@ class TestBlockchainIntegrationE2E:
         # Step 1: Create wallets
         owner_wallet = blockchain_manager.create_wallet(label="Owner")
         beneficiary_wallet = blockchain_manager.create_wallet(label="Beneficiary")
-        
+
         # Step 2: Create inheritance rule
         rule = blockchain_manager.create_inheritance_rule(
             wallet_address=owner_wallet.address,
             beneficiary_address=beneficiary_wallet.address,
             trigger_type=InheritanceTrigger.MANUAL
         )
-        
+
         # Step 3: Check triggers
         triggered_rules = blockchain_manager.check_inheritance_triggers()
-        
+
         # Step 4: Verify workflow
         assert owner_wallet is not None
         assert beneficiary_wallet is not None
@@ -498,18 +488,18 @@ class TestBlockchainIntegrationE2E:
         # Step 1: Create wallets
         sender_wallet = blockchain_manager.create_wallet(label="Sender")
         receiver_wallet = blockchain_manager.create_wallet(label="Receiver")
-        
+
         # Step 2: Get balances
         sender_balance = blockchain_manager.get_balance(sender_wallet.address)
         receiver_balance = blockchain_manager.get_balance(receiver_wallet.address)
-        
+
         # Step 3: Estimate gas
         gas_estimate = blockchain_manager.estimate_gas(
             from_address=sender_wallet.address,
             to_address=receiver_wallet.address,
             value=Decimal("0.001")
         )
-        
+
         # Step 4: Verify workflow
         assert sender_wallet is not None
         assert receiver_wallet is not None
@@ -522,7 +512,7 @@ class TestBlockchainIntegrationE2E:
         """Test network information workflow"""
         # Step 1: Get network info
         info = blockchain_manager.get_network_info()
-        
+
         # Step 2: Verify network info
         assert info is not None
         assert info['network'] == "sepolia"
@@ -540,56 +530,53 @@ class TestBlockchainPerformanceE2E:
 
     def test_wallet_creation_performance(self, blockchain_manager):
         """Test wallet creation performance"""
-        import time
-        
+
         # Create multiple wallets and measure time
         start_time = time.time()
-        
+
         for i in range(10):
             wallet = blockchain_manager.create_wallet(label=f"Wallet {i}")
-        
+
         elapsed_time = time.time() - start_time
-        
+
         # Verify performance (should be < 5 seconds for 10 wallets)
         assert elapsed_time < 5.0
 
     def test_balance_retrieval_performance(self, blockchain_manager):
         """Test balance retrieval performance"""
-        import time
-        
+
         # Create wallet
         wallet = blockchain_manager.create_wallet()
-        
+
         # Measure balance retrieval time
         start_time = time.time()
-        
+
         for i in range(10):
             balance = blockchain_manager.get_balance(wallet.address)
-        
+
         elapsed_time = time.time() - start_time
-        
+
         # Verify performance (should be < 10 seconds for 10 retrievals)
         assert elapsed_time < 10.0
 
     def test_gas_estimation_performance(self, blockchain_manager):
         """Test gas estimation performance"""
-        import time
-        
+
         # Create wallets
         wallet1 = blockchain_manager.create_wallet()
         wallet2 = blockchain_manager.create_wallet()
-        
+
         # Measure gas estimation time
         start_time = time.time()
-        
+
         for i in range(10):
             gas_estimate = blockchain_manager.estimate_gas(
                 from_address=wallet1.address,
                 to_address=wallet2.address,
                 value=Decimal("0.001")
             )
-        
+
         elapsed_time = time.time() - start_time
-        
+
         # Verify performance (should be < 10 seconds for 10 estimations)
         assert elapsed_time < 10.0

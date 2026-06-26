@@ -1,6 +1,5 @@
 """Shared pytest configuration and fixtures for Lazarus Protocol tests."""
 
-import os
 import sys
 from pathlib import Path
 

@@ -1,5 +1,5 @@
-from setuptools import setup, find_packages
-import os
+
+from setuptools import find_packages, setup
 
 # Read the long description from README.md
 with open("README.md", "r", encoding="utf-8") as fh:

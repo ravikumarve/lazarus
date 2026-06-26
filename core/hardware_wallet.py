@@ -14,19 +14,15 @@ hardware wallets for enhanced security.
 
 from __future__ import annotations
 
-import json
 import logging
 from dataclasses import dataclass
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from enum import Enum
-from pathlib import Path
-from typing import Optional, List, Dict, Any, Tuple
+from typing import Any, Dict, List, Optional
 
 try:
-    from ledgereth.complex import (
-        LedgerClient,
-        Exception as LedgerException
-    )
+    from ledgereth.complex import Exception as LedgerException
+    from ledgereth.complex import LedgerClient
     LEDGER_AVAILABLE = True
 except ImportError:
     LEDGER_AVAILABLE = False
@@ -34,13 +30,10 @@ except ImportError:
     LedgerException = Exception
 
 try:
-    from trezorlib.transport import (
-        enumerate_devices,
-        TransportException
-    )
+    from trezorlib import btc
     from trezorlib.client import TrezorClient
     from trezorlib.tools import parse_path
-    from trezorlib import btc
+    from trezorlib.transport import TransportException, enumerate_devices
     TREZOR_AVAILABLE = True
 except ImportError:
     TREZOR_AVAILABLE = False
@@ -50,12 +43,6 @@ except ImportError:
     parse_path = None
     btc = None
 
-from core.blockchain import (
-    WalletType,
-    Transaction,
-    BlockchainManager,
-    get_blockchain_manager
-)
 
 
 # ---------------------------------------------------------------------------
@@ -134,14 +121,14 @@ class HardwareWalletManager:
     def __init__(self):
         """Initialize hardware wallet manager"""
         self._logger = logging.getLogger("lazarus.hardware_wallet")
-        
+
         # Connected wallets
         self._connected_wallets: Dict[str, HardwareWalletConfig] = {}
-        
+
         # Active clients
         self._ledger_client: Optional[LedgerClient] = None
         self._trezor_client: Optional[TrezorClient] = None
-        
+
         self._logger.info("Hardware wallet manager initialized")
 
     # ---------------------------------------------------------------------------
@@ -156,31 +143,31 @@ class HardwareWalletManager:
             List of detected hardware wallets
         """
         devices = []
-        
+
         # Detect Ledger devices
         if LEDGER_AVAILABLE:
             ledger_devices = self._detect_ledger_devices()
             devices.extend(ledger_devices)
-        
+
         # Detect Trezor devices
         if TREZOR_AVAILABLE:
             trezor_devices = self._detect_trezor_devices()
             devices.extend(trezor_devices)
-        
+
         self._logger.info(f"Detected {len(devices)} hardware wallet(s)")
         return devices
 
     def _detect_ledger_devices(self) -> List[HardwareWalletInfo]:
         """Detect Ledger devices"""
         devices = []
-        
+
         if not LEDGER_AVAILABLE:
             return devices
-        
+
         try:
             # Try to connect to Ledger
             client = LedgerClient()
-            
+
             # Get device info
             info = HardwareWalletInfo(
                 wallet_type=HardwareWalletType.LEDGER,
@@ -188,22 +175,22 @@ class HardwareWalletManager:
                 connected=True,
                 authenticated=False
             )
-            
+
             devices.append(info)
             self._logger.info("Detected Ledger device")
-            
+
         except Exception as e:
             self._logger.debug(f"No Ledger device detected: {e}")
-        
+
         return devices
 
     def _detect_trezor_devices(self) -> List[HardwareWalletInfo]:
         """Detect Trezor devices"""
         devices = []
-        
+
         if not TREZOR_AVAILABLE:
             return devices
-        
+
         try:
             # Enumerate Trezor devices
             for device in enumerate_devices():
@@ -213,13 +200,13 @@ class HardwareWalletManager:
                     connected=True,
                     authenticated=False
                 )
-                
+
                 devices.append(info)
                 self._logger.info("Detected Trezor device")
-            
+
         except Exception as e:
             self._logger.debug(f"No Trezor device detected: {e}")
-        
+
         return devices
 
     # ---------------------------------------------------------------------------
@@ -242,18 +229,18 @@ class HardwareWalletManager:
         if not LEDGER_AVAILABLE:
             self._logger.error("Ledger support not available")
             return None
-        
+
         try:
             # Create Ledger client
             client = LedgerClient()
             self._ledger_client = client
-            
+
             # Get address
             address = client.get_address(derivation_path)
-            
+
             # Get public key
             public_key = client.get_public_key(derivation_path)
-            
+
             # Create wallet info
             info = HardwareWalletInfo(
                 wallet_type=HardwareWalletType.LEDGER,
@@ -263,7 +250,7 @@ class HardwareWalletManager:
                 connected=True,
                 authenticated=True
             )
-            
+
             # Store wallet config
             config = HardwareWalletConfig(
                 wallet_type=HardwareWalletType.LEDGER,
@@ -274,12 +261,12 @@ class HardwareWalletManager:
                 last_used=datetime.now(UTC),
                 status=HardwareWalletStatus.AUTHENTICATED
             )
-            
+
             self._connected_wallets[address] = config
-            
+
             self._logger.info(f"Connected to Ledger: {address}")
             return info
-            
+
         except Exception as e:
             self._logger.error(f"Failed to connect to Ledger: {e}")
             return None
@@ -300,25 +287,25 @@ class HardwareWalletManager:
         if not TREZOR_AVAILABLE:
             self._logger.error("Trezor support not available")
             return None
-        
+
         try:
             # Enumerate devices
             devices = enumerate_devices()
             if not devices:
                 self._logger.error("No Trezor device found")
                 return None
-            
+
             # Create Trezor client
             client = TrezorClient(devices[0])
             self._trezor_client = client
-            
+
             # Get address
             address_node = parse_path(derivation_path)
             address = client.ethereum.get_address(address_node, False)
-            
+
             # Get public key
             public_key = client.ethereum.get_public_key(address_node)
-            
+
             # Create wallet info
             info = HardwareWalletInfo(
                 wallet_type=HardwareWalletType.TREZOR,
@@ -328,7 +315,7 @@ class HardwareWalletManager:
                 connected=True,
                 authenticated=True
             )
-            
+
             # Store wallet config
             config = HardwareWalletConfig(
                 wallet_type=HardwareWalletType.TREZOR,
@@ -339,12 +326,12 @@ class HardwareWalletManager:
                 last_used=datetime.now(UTC),
                 status=HardwareWalletStatus.AUTHENTICATED
             )
-            
+
             self._connected_wallets[address] = config
-            
+
             self._logger.info(f"Connected to Trezor: {address}")
             return info
-            
+
         except Exception as e:
             self._logger.error(f"Failed to connect to Trezor: {e}")
             return None
@@ -363,16 +350,16 @@ class HardwareWalletManager:
             config = self._connected_wallets[address]
             config.status = HardwareWalletStatus.DISCONNECTED
             del self._connected_wallets[address]
-            
+
             # Close clients
             if config.wallet_type == HardwareWalletType.LEDGER:
                 self._ledger_client = None
             elif config.wallet_type == HardwareWalletType.TREZOR:
                 self._trezor_client = None
-            
+
             self._logger.info(f"Disconnected hardware wallet: {address}")
             return True
-        
+
         return False
 
     # ---------------------------------------------------------------------------
@@ -397,9 +384,9 @@ class HardwareWalletManager:
         if address not in self._connected_wallets:
             self._logger.error(f"Wallet not connected: {address}")
             return None
-        
+
         config = self._connected_wallets[address]
-        
+
         try:
             if config.wallet_type == HardwareWalletType.LEDGER:
                 return self._sign_with_ledger(config, transaction)
@@ -408,7 +395,7 @@ class HardwareWalletManager:
             else:
                 self._logger.error(f"Unsupported wallet type: {config.wallet_type}")
                 return None
-                
+
         except Exception as e:
             self._logger.error(f"Failed to sign transaction: {e}")
             return None
@@ -422,20 +409,20 @@ class HardwareWalletManager:
         if not self._ledger_client:
             self._logger.error("Ledger client not connected")
             return None
-        
+
         try:
             # Sign transaction
             signed_tx = self._ledger_client.sign_transaction(
                 config.derivation_path,
                 transaction
             )
-            
+
             # Update last used
             config.last_used = datetime.now(UTC)
-            
+
             self._logger.info(f"Signed transaction with Ledger: {config.device_id}")
             return signed_tx
-            
+
         except Exception as e:
             self._logger.error(f"Failed to sign with Ledger: {e}")
             return None
@@ -449,7 +436,7 @@ class HardwareWalletManager:
         if not self._trezor_client:
             self._logger.error("Trezor client not connected")
             return None
-        
+
         try:
             # Sign transaction
             signed_tx = self._trezor_client.ethereum.sign_tx(
@@ -462,13 +449,13 @@ class HardwareWalletManager:
                 transaction.get('data', b''),
                 transaction['chain_id']
             )
-            
+
             # Update last used
             config.last_used = datetime.now(UTC)
-            
+
             self._logger.info(f"Signed transaction with Trezor: {config.device_id}")
             return signed_tx
-            
+
         except Exception as e:
             self._logger.error(f"Failed to sign with Trezor: {e}")
             return None
@@ -498,19 +485,19 @@ class HardwareWalletManager:
                 f"cannot exceed number of addresses ({len(addresses)})"
             )
             return None
-        
+
         try:
             # In a real implementation, this would create a smart contract
             # For now, return a placeholder address
             multisig_address = f"0x{'0' * 40}"  # Placeholder
-            
+
             self._logger.info(
                 f"Created multi-sig wallet: {multisig_address} "
                 f"({required_signatures}/{len(addresses)})"
             )
-            
+
             return multisig_address
-            
+
         except Exception as e:
             self._logger.error(f"Failed to create multi-sig wallet: {e}")
             return None
@@ -535,15 +522,15 @@ class HardwareWalletManager:
         try:
             # Sign with hardware wallet
             signature = self.sign_transaction(signer_address, transaction)
-            
+
             if signature:
                 self._logger.info(
                     f"Signed multi-sig transaction: {multisig_address} "
                     f"by {signer_address}"
                 )
-            
+
             return signature
-            
+
         except Exception as e:
             self._logger.error(f"Failed to sign multi-sig transaction: {e}")
             return None
@@ -573,9 +560,9 @@ class HardwareWalletManager:
         """
         if address not in self._connected_wallets:
             return None
-        
+
         config = self._connected_wallets[address]
-        
+
         return HardwareWalletInfo(
             wallet_type=config.wallet_type,
             address=address,
@@ -607,20 +594,20 @@ class HardwareWalletManager:
         """
         if address not in self._connected_wallets:
             return False
-        
+
         config = self._connected_wallets[address]
-        
+
         try:
             # Request user authentication on device
             # This would trigger a prompt on the hardware wallet
             # For now, we'll just mark as authenticated
-            
+
             config.status = HardwareWalletStatus.AUTHENTICATED
             config.last_used = datetime.now(UTC)
-            
+
             self._logger.info(f"Authenticated hardware wallet: {address}")
             return True
-            
+
         except Exception as e:
             self._logger.error(f"Failed to authenticate: {e}")
             return False
@@ -638,10 +625,10 @@ def get_hardware_wallet_manager() -> HardwareWalletManager:
         HardwareWalletManager instance
     """
     global _hardware_wallet_manager
-    
+
     if _hardware_wallet_manager is None:
         _hardware_wallet_manager = HardwareWalletManager()
-    
+
     return _hardware_wallet_manager
 
 

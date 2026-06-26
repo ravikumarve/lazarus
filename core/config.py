@@ -26,10 +26,9 @@ import math
 import os
 import stat
 import time
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Optional, Dict, Any
-
+from typing import Optional
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -241,9 +240,8 @@ def _secure_file_permissions(file_path: Path) -> None:
     Args:
         file_path: Path to the file to secure
     """
-    import platform
-    import subprocess
     import logging
+    import platform
 
     # Set up logging for this module
     logger = logging.getLogger(__name__)
@@ -297,9 +295,9 @@ def _try_pywin32_permissions(file_path: Path, logger: logging.Logger) -> bool:
         True if successful, False if pywin32 is not available or fails
     """
     try:
-        import win32security
         import win32api
         import win32con
+        import win32security
 
         # Get the file handle
         file_handle = win32security.CreateFile(

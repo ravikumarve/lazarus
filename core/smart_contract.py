@@ -1,21 +1,17 @@
 from __future__ import annotations
 
-import json
 import logging
-import os
-import time
-from dataclasses import dataclass, asdict
-from datetime import datetime, UTC, timedelta
-from enum import Enum
-from pathlib import Path
-from typing import Optional, List, Dict, Any, Tuple
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from decimal import Decimal
+from enum import Enum
+from typing import Dict, Optional
 
 try:
-    from web3 import Web3
-    from web3.exceptions import TransactionNotFound, ContractLogicError
     from eth_account import Account
     from eth_utils import to_checksum_address, to_hex
+    from web3 import Web3
+    from web3.exceptions import ContractLogicError, TransactionNotFound
     WEB3_AVAILABLE = True
 except ImportError:
     WEB3_AVAILABLE = False
@@ -26,8 +22,7 @@ except ImportError:
     to_checksum_address = lambda x: x
     to_hex = lambda x: x
 
-from core.blockchain import BlockchainManager, BlockchainConfig
-
+from core.blockchain import BlockchainConfig, BlockchainManager
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -253,6 +248,63 @@ class SmartContractManager:
     # Contract Deployment
     # ---------------------------------------------------------------------------
 
+    def _build_constructor_tx(self, contract, beneficiary_address: str, checkin_period: int, grace_period: int, deployer_address: str) -> dict:
+        """Build the constructor transaction for contract deployment."""
+        return contract.constructor(
+            to_checksum_address(beneficiary_address),
+            checkin_period,
+            grace_period
+        ).build_transaction({
+            'from': deployer_address,
+            'gas': self.config.gas_limit,
+            'gasPrice': int(self._w3.eth.gas_price * self.config.gas_price_multiplier),
+            'nonce': self._w3.eth.get_transaction_count(deployer_address),
+            'chainId': self._w3.eth.chain_id
+        })
+
+    def _deploy_and_wait(self, constructor_tx: dict, private_key: str) -> tuple:
+        """Sign, send, and wait for contract deployment. Returns (tx_hash, receipt)."""
+        signed_tx = self._w3.eth.account.sign_transaction(constructor_tx, private_key)
+        tx_hash = self._w3.eth.send_raw_transaction(signed_tx.raw_transaction)
+        self._logger.info(f"Contract deployment transaction sent: {tx_hash.hex()}")
+        receipt = self._w3.eth.wait_for_transaction_receipt(
+            tx_hash, timeout=self.config.deployment_timeout
+        )
+        return tx_hash, receipt
+
+    def _record_deployment(self, receipt, tx_hash, deployer_address: str, beneficiary_address: str, checkin_period: int, grace_period: int) -> ContractDeployment:
+        """Record deployment results and save contract configuration."""
+        contract_address = receipt['contractAddress']
+        deployment_cost = Decimal(str(self._w3.from_wei(
+            receipt['gasUsed'] * receipt['effectiveGasPrice'], 'ether'
+        )))
+        deployment = ContractDeployment(
+            contract_address=contract_address,
+            transaction_hash=tx_hash.hex(),
+            block_number=receipt['blockNumber'],
+            gas_used=receipt['gasUsed'],
+            gas_price=receipt['effectiveGasPrice'],
+            deployment_cost=deployment_cost,
+            timestamp=datetime.now(UTC)
+        )
+        contract_config = ContractConfig(
+            contract_address=contract_address,
+            contract_type=ContractType.INHERITANCE,
+            network=self.config.network,
+            owner_address=deployer_address,
+            beneficiary_address=beneficiary_address,
+            checkin_period=checkin_period,
+            grace_period=grace_period,
+            created_at=datetime.now(UTC),
+            status=ContractStatus.ACTIVE
+        )
+        self._contracts[contract_address] = contract_config
+        self._save_contract(contract_config)
+        self._logger.info(
+            f"Inheritance contract deployed: {contract_address} (cost: {deployment_cost} ETH)"
+        )
+        return deployment
+
     def deploy_inheritance_contract(
         self,
         beneficiary_address: str,
@@ -274,102 +326,29 @@ class SmartContractManager:
         """
         if not self._w3:
             raise RuntimeError("Web3 not connected")
-
         if not private_key:
             self._logger.error("Private key required for contract deployment")
             return None
 
         try:
-            # Get deployer account
-            account = Account.from_key(private_key)
-            deployer_address = to_checksum_address(account.address)
-
-            # Validate beneficiary address
+            deployer_address = to_checksum_address(Account.from_key(private_key).address)
             if not self._blockchain_manager.validate_address(beneficiary_address):
                 self._logger.error(f"Invalid beneficiary address: {beneficiary_address}")
                 return None
 
-            # Get contract bytecode (simplified for example)
-            contract_bytecode = self._get_inheritance_contract_bytecode()
-
-            # Get contract ABI
-            contract_abi = INHERITANCE_CONTRACT_ABI
-
-            # Create contract instance
             contract = self._w3.eth.contract(
-                abi=contract_abi,
-                bytecode=contract_bytecode
+                abi=INHERITANCE_CONTRACT_ABI,
+                bytecode=self._get_inheritance_contract_bytecode()
             )
 
-            # Build constructor transaction
-            constructor_tx = contract.constructor(
-                to_checksum_address(beneficiary_address),
-                checkin_period,
-                grace_period
-            ).build_transaction({
-                'from': deployer_address,
-                'gas': self.config.gas_limit,
-                'gasPrice': int(self._w3.eth.gas_price * self.config.gas_price_multiplier),
-                'nonce': self._w3.eth.get_transaction_count(deployer_address),
-                'chainId': self._w3.eth.chain_id
-            })
-
-            # Sign transaction
-            signed_tx = self._w3.eth.account.sign_transaction(constructor_tx, private_key)
-
-            # Send transaction
-            tx_hash = self._w3.eth.send_raw_transaction(signed_tx.raw_transaction)
-
-            self._logger.info(f"Contract deployment transaction sent: {tx_hash.hex()}")
-
-            # Wait for deployment
-            receipt = self._w3.eth.wait_for_transaction_receipt(
-                tx_hash,
-                timeout=self.config.deployment_timeout
+            constructor_tx = self._build_constructor_tx(
+                contract, beneficiary_address, checkin_period, grace_period, deployer_address
             )
-
-            # Get contract address
-            contract_address = receipt['contractAddress']
-
-            # Calculate deployment cost
-            deployment_cost = Decimal(str(self._w3.from_wei(
-                receipt['gasUsed'] * receipt['effectiveGasPrice'],
-                'ether'
-            )))
-
-            # Create deployment info
-            deployment = ContractDeployment(
-                contract_address=contract_address,
-                transaction_hash=tx_hash.hex(),
-                block_number=receipt['blockNumber'],
-                gas_used=receipt['gasUsed'],
-                gas_price=receipt['effectiveGasPrice'],
-                deployment_cost=deployment_cost,
-                timestamp=datetime.now(UTC)
+            tx_hash, receipt = self._deploy_and_wait(constructor_tx, private_key)
+            return self._record_deployment(
+                receipt, tx_hash, deployer_address, beneficiary_address,
+                checkin_period, grace_period
             )
-
-            # Save contract configuration
-            contract_config = ContractConfig(
-                contract_address=contract_address,
-                contract_type=ContractType.INHERITANCE,
-                network=self.config.network,
-                owner_address=deployer_address,
-                beneficiary_address=beneficiary_address,
-                checkin_period=checkin_period,
-                grace_period=grace_period,
-                created_at=datetime.now(UTC),
-                status=ContractStatus.ACTIVE
-            )
-
-            self._contracts[contract_address] = contract_config
-            self._save_contract(contract_config)
-
-            self._logger.info(
-                f"Inheritance contract deployed: {contract_address} "
-                f"(cost: {deployment_cost} ETH)"
-            )
-
-            return deployment
 
         except Exception as e:
             self._logger.error(f"Failed to deploy inheritance contract: {e}")

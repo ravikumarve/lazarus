@@ -8,13 +8,14 @@ from __future__ import annotations
 
 import os
 import re
-import questionary
 from pathlib import Path
+
+import questionary
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from core.config import BeneficiaryConfig, VaultConfig, LazarusConfig, save_config
+from core.config import BeneficiaryConfig, LazarusConfig, VaultConfig, save_config
 from core.encryption import encrypt_file, load_public_key_from_file
 
 console = Console()
@@ -125,7 +126,7 @@ def _validate_email(email: str) -> bool:
     """Validate email format using RFC 5322 compliant regex pattern."""
     if not email or len(email) > 254:
         return False
-    
+
     # RFC 5322 compliant email regex
     pattern = r"^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$"
     return bool(re.match(pattern, email))
@@ -164,15 +165,15 @@ def _validate_public_key_file(path: Path) -> bool:
         return "Public key file does not exist"
     if not path.is_file():
         return "Path is not a file"
-    
+
     # Check for path traversal attempts
     if ".." in str(path):
         return "Path traversal detected"
-    
+
     # Check file size
     if path.stat().st_size > 1024 * 1024:  # 1MB max
         return "File is too large for a public key"
-    
+
     # Check file is within allowed directories
     allowed_dirs = [Path.home(), Path.cwd()]
     try:
@@ -183,7 +184,7 @@ def _validate_public_key_file(path: Path) -> bool:
             if resolved == allowed_resolved or str(resolved).startswith(str(allowed_resolved)):
                 is_allowed = True
                 break
-        
+
         if not is_allowed:
             return "File not in allowed directories"
     except (OSError, RuntimeError) as e:
@@ -218,19 +219,19 @@ def _validate_secret_file(path: Path) -> bool:
         return "File does not exist"
     if not path.is_file():
         return "Path is not a file"
-    
+
     # Check for path traversal attempts
     if ".." in str(path):
         return "Path traversal detected"
-    
+
     # Check file size
     if path.stat().st_size > 50 * 1024 * 1024:  # 50MB max
         return "File is too large (max 50MB)"
-    
+
     # Check file is readable
     if not os.access(path, os.R_OK):
         return "File is not readable"
-    
+
     # Check file is within allowed directories
     allowed_dirs = [Path.home(), Path.cwd()]
     try:
@@ -241,12 +242,12 @@ def _validate_secret_file(path: Path) -> bool:
             if resolved == allowed_resolved or str(resolved).startswith(str(allowed_resolved)):
                 is_allowed = True
                 break
-        
+
         if not is_allowed:
             return "File not in allowed directories"
     except (OSError, RuntimeError) as e:
         return f"Invalid path: {e}"
-    
+
     return True
 
 

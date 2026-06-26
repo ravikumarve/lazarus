@@ -25,8 +25,8 @@ import logging
 import os
 import time
 from dataclasses import dataclass
-from typing import Optional, Dict, Any
 from enum import Enum
+from typing import Any, Dict, Optional
 
 import requests
 

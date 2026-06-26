@@ -6,10 +6,10 @@ in core/config.py provides equivalent security to POSIX chmod 0o600.
 On non-Windows systems, most tests are skipped automatically.
 """
 
+import logging
 import os
 import sys
 import tempfile
-import logging
 from pathlib import Path
 
 import pytest

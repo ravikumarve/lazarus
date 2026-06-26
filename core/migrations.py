@@ -13,12 +13,9 @@ from __future__ import annotations
 import logging
 import sqlite3
 from dataclasses import dataclass
-from datetime import datetime
-from pathlib import Path
-from typing import Callable, List, Optional, Dict, Any
+from typing import Any, Callable, Dict, List, Optional
 
 from core.database import DatabaseManager
-
 
 # ---------------------------------------------------------------------------
 # Migration Data Structures
@@ -121,18 +118,18 @@ class MigrationManager:
             True if successful, False otherwise
         """
         applied = self.get_applied_migrations()
-        
+
         if migration.version in applied:
             self._logger.info(f"Migration {migration.version} already applied")
             return True
-        
+
         self._logger.info(f"Applying migration {migration.version}: {migration.description}")
-        
+
         try:
             with self.db.transaction() as conn:
                 # Execute migration
                 migration.up(conn)
-                
+
                 # Record migration
                 cursor = conn.cursor()
                 cursor.execute(
@@ -142,10 +139,10 @@ class MigrationManager:
                     """,
                     (migration.version, migration.description, 1)
                 )
-            
+
             self._logger.info(f"Migration {migration.version} applied successfully")
             return True
-            
+
         except Exception as e:
             self._logger.error(f"Failed to apply migration {migration.version}: {e}")
             return False
@@ -161,28 +158,28 @@ class MigrationManager:
             True if successful, False otherwise
         """
         applied = self.get_applied_migrations()
-        
+
         if migration.version not in applied:
             self._logger.warning(f"Migration {migration.version} not applied, cannot rollback")
             return False
-        
+
         self._logger.info(f"Rolling back migration {migration.version}: {migration.description}")
-        
+
         try:
             with self.db.transaction() as conn:
                 # Execute rollback
                 migration.down(conn)
-                
+
                 # Remove migration record
                 cursor = conn.cursor()
                 cursor.execute(
                     "DELETE FROM schema_migrations WHERE version = ?",
                     (migration.version,)
                 )
-            
+
             self._logger.info(f"Migration {migration.version} rolled back successfully")
             return True
-            
+
         except Exception as e:
             self._logger.error(f"Failed to rollback migration {migration.version}: {e}")
             return False
@@ -200,11 +197,11 @@ class MigrationManager:
         """
         applied = self.get_applied_migrations()
         current_version = max(applied) if applied else 0
-        
+
         if target_version == current_version:
             self._logger.info(f"Already at version {target_version}")
             return True
-        
+
         if target_version > current_version:
             # Migrate up
             for migration in migrations:
@@ -217,7 +214,7 @@ class MigrationManager:
                 if migration.version <= current_version and migration.version > target_version:
                     if not self.rollback_migration(migration):
                         return False
-        
+
         return True
 
     def migrate_to_latest(self, migrations: List[Migration]) -> bool:
@@ -233,7 +230,7 @@ class MigrationManager:
         if not migrations:
             self._logger.info("No migrations available")
             return True
-        
+
         latest_version = max(m.version for m in migrations)
         return self.migrate_to_version(latest_version, migrations)
 
@@ -254,7 +251,7 @@ def drop_initial_schema(conn: sqlite3.Connection) -> None:
         'documents', 'events', 'rate_limits', 'vaults',
         'configurations', 'users', 'schema_migrations'
     ]
-    
+
     for table in tables:
         conn.execute(f"DROP TABLE IF EXISTS {table}")
 
@@ -273,7 +270,7 @@ def add_user_preferences_table(conn: sqlite3.Connection) -> None:
             UNIQUE(user_id, preference_key)
         )
     """)
-    
+
     # Create index
     conn.execute("CREATE INDEX IF NOT EXISTS idx_user_preferences_user ON user_preferences(user_id)")
 
@@ -299,7 +296,7 @@ def add_audit_log_table(conn: sqlite3.Connection) -> None:
             FOREIGN KEY (configuration_id) REFERENCES configurations(id) ON DELETE SET NULL
         )
     """)
-    
+
     # Create indexes
     conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_log_user ON audit_log(user_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_log_config ON audit_log(configuration_id)")
@@ -327,7 +324,7 @@ def add_api_keys_table(conn: sqlite3.Connection) -> None:
             UNIQUE(key_hash)
         )
     """)
-    
+
     # Create indexes
     conn.execute("CREATE INDEX IF NOT EXISTS idx_api_keys_user ON api_keys(user_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(key_hash)")
@@ -399,7 +396,7 @@ def run_migrations(db: DatabaseManager, target_version: Optional[int] = None) ->
         True if successful, False otherwise
     """
     manager = get_migration_manager(db)
-    
+
     if target_version is None:
         return manager.migrate_to_latest(MIGRATIONS)
     else:
@@ -419,10 +416,10 @@ def get_migration_status(db: DatabaseManager) -> Dict[str, Any]:
     manager = get_migration_manager(db)
     applied = manager.get_applied_migrations()
     history = manager.get_migration_history()
-    
+
     current_version = max(applied) if applied else 0
     latest_version = max(m.version for m in MIGRATIONS) if MIGRATIONS else 0
-    
+
     return {
         "current_version": current_version,
         "latest_version": latest_version,

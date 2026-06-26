@@ -9,28 +9,21 @@ Tests for integration with external services:
 - Webhook integration
 """
 
-import os
-import pytest
-import tempfile
-import shutil
-from pathlib import Path
-from datetime import datetime, UTC, timedelta
-from unittest.mock import patch, MagicMock, AsyncMock
-import time
 import json
+import os
+import shutil
+import tempfile
+from datetime import UTC, datetime
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 from core.config import (
-    load_config,
-    save_config,
     LAZARUS_DIR,
 )
 from core.storage import (
-    upload_to_ipfs,
-    download_from_ipfs,
     StorageConfig,
-)
-from core.security import (
-    key_manager,
 )
 
 
@@ -39,13 +32,13 @@ def temp_lazarus_dir():
     """Create temporary Lazarus directory for testing"""
     temp_dir = tempfile.mkdtemp()
     original_dir = LAZARUS_DIR
-    
+
     # Override LAZARUS_DIR for testing
     import core.config
     core.config.LAZARUS_DIR = Path(temp_dir)
-    
+
     yield Path(temp_dir)
-    
+
     # Cleanup
     shutil.rmtree(temp_dir, ignore_errors=True)
     core.config.LAZARUS_DIR = original_dir
@@ -115,18 +108,18 @@ class TestEmailServiceIntegration:
         to_email = "recipient@example.com"
         subject = "Test Email"
         content = "This is a test email from Lazarus Protocol"
-        
+
         # Step 2: Send email
         success = mock_sendgrid(
             to_email=to_email,
             subject=subject,
             content=content
         )
-        
+
         # Step 3: Verify email was sent
         assert success == True
         mock_sendgrid.assert_called_once()
-        
+
         # Step 4: Verify call parameters
         call_args = mock_sendgrid.call_args
         assert call_args[1]['to_email'] == to_email
@@ -142,7 +135,7 @@ class TestEmailServiceIntegration:
         content = "This is a test email with attachment"
         attachment_path = temp_lazarus_dir / "test_attachment.txt"
         attachment_path.write_text("Test attachment content")
-        
+
         # Step 2: Send email with attachment
         success = mock_sendgrid(
             to_email=to_email,
@@ -150,7 +143,7 @@ class TestEmailServiceIntegration:
             content=content,
             attachment_path=str(attachment_path)
         )
-        
+
         # Step 3: Verify email was sent
         assert success == True
         mock_sendgrid.assert_called_once()
@@ -160,14 +153,14 @@ class TestEmailServiceIntegration:
         """Test SendGrid email failure handling"""
         # Step 1: Configure mock to fail
         mock_sendgrid.return_value = False
-        
+
         # Step 2: Attempt to send email
         success = mock_sendgrid(
             to_email="recipient@example.com",
             subject="Test Email",
             content="This is a test email"
         )
-        
+
         # Step 3: Verify failure was handled
         assert success == False
 
@@ -182,7 +175,7 @@ class TestEmailServiceIntegration:
         ]
         subject = "Batch Test Email"
         content = "This is a batch test email"
-        
+
         # Step 2: Send batch emails
         results = []
         for recipient in recipients:
@@ -192,7 +185,7 @@ class TestEmailServiceIntegration:
                 content=content
             )
             results.append(success)
-        
+
         # Step 3: Verify all emails were sent
         assert len(results) == 3
         assert all(results)
@@ -208,14 +201,14 @@ class TestIPFSServiceIntegration:
         test_file = temp_lazarus_dir / "test_file.txt"
         test_content = b"Test content for IPFS upload"
         test_file.write_bytes(test_content)
-        
+
         # Step 2: Upload to IPFS
         cid = mock_ipfs['upload'](str(test_file))
-        
+
         # Step 3: Verify upload
         assert cid == "QmTestCID123"
         mock_ipfs['upload'].assert_called_once()
-        
+
         # Step 4: Verify call parameters
         call_args = mock_ipfs['upload'].call_args
         assert call_args[0][0] == str(test_file)
@@ -225,11 +218,11 @@ class TestIPFSServiceIntegration:
         # Step 1: Download from IPFS
         cid = "QmTestCID123"
         content = mock_ipfs['download'](cid)
-        
+
         # Step 2: Verify download
         assert content == b"test content"
         mock_ipfs['download'].assert_called_once()
-        
+
         # Step 3: Verify call parameters
         call_args = mock_ipfs['download'].call_args
         assert call_args[0][0] == cid
@@ -240,10 +233,10 @@ class TestIPFSServiceIntegration:
         test_file = temp_lazarus_dir / "large_file.txt"
         large_content = b"x" * (10 * 1024 * 1024)  # 10 MB
         test_file.write_bytes(large_content)
-        
+
         # Step 2: Upload to IPFS
         cid = mock_ipfs['upload'](str(test_file))
-        
+
         # Step 3: Verify upload
         assert cid == "QmTestCID123"
 
@@ -253,7 +246,7 @@ class TestIPFSServiceIntegration:
         valid_cid = "QmTestCID123"
         content = mock_ipfs['download'](valid_cid)
         assert content is not None
-        
+
         # Step 2: Test invalid CID (should handle gracefully)
         # In real scenario, would validate CID format
         assert True
@@ -266,14 +259,14 @@ class TestPinataServiceIntegration:
         """Test Pinata file pinning"""
         # Step 1: Prepare CID for pinning
         cid = "QmTestCID123"
-        
+
         # Step 2: Pin to Pinata
         pinned_cid = mock_pinata(cid)
-        
+
         # Step 3: Verify pinning
         assert pinned_cid == "QmPinataCID456"
         mock_pinata.assert_called_once()
-        
+
         # Step 4: Verify call parameters
         call_args = mock_pinata.call_args
         assert call_args[0][0] == cid
@@ -282,13 +275,13 @@ class TestPinataServiceIntegration:
         """Test Pinata multiple files pinning"""
         # Step 1: Prepare multiple CIDs
         cids = ["QmCID1", "QmCID2", "QmCID3"]
-        
+
         # Step 2: Pin all files
         results = []
         for cid in cids:
             pinned_cid = mock_pinata(cid)
             results.append(pinned_cid)
-        
+
         # Step 3: Verify all files were pinned
         assert len(results) == 3
         assert all(result == "QmPinataCID456" for result in results)
@@ -298,7 +291,7 @@ class TestPinataServiceIntegration:
         """Test Pinata pinning failure handling"""
         # Step 1: Configure mock to fail
         mock_pinata.side_effect = Exception("Pinning failed")
-        
+
         # Step 2: Attempt to pin file
         try:
             pinned_cid = mock_pinata("QmTestCID123")
@@ -318,14 +311,14 @@ class TestWeb3StorageIntegration:
         test_file = temp_lazarus_dir / "test_file.txt"
         test_content = b"Test content for Web3.Storage"
         test_file.write_bytes(test_content)
-        
+
         # Step 2: Upload to Web3.Storage
         cid = mock_web3_storage(str(test_file))
-        
+
         # Step 3: Verify upload
         assert cid == "QmWeb3CID789"
         mock_web3_storage.assert_called_once()
-        
+
         # Step 4: Verify call parameters
         call_args = mock_web3_storage.call_args
         assert call_args[0][0] == str(test_file)
@@ -336,10 +329,10 @@ class TestWeb3StorageIntegration:
         car_file = temp_lazarus_dir / "test.car"
         car_content = b"CAR file content"
         car_file.write_bytes(car_content)
-        
+
         # Step 2: Upload CAR file
         cid = mock_web3_storage(str(car_file))
-        
+
         # Step 3: Verify upload
         assert cid == "QmWeb3CID789"
 
@@ -352,13 +345,13 @@ class TestWeb3StorageIntegration:
             test_content = f"Test content {i}".encode()
             test_file.write_bytes(test_content)
             files.append(str(test_file))
-        
+
         # Step 2: Upload all files
         results = []
         for file_path in files:
             cid = mock_web3_storage(file_path)
             results.append(cid)
-        
+
         # Step 3: Verify all files were uploaded
         assert len(results) == 3
         assert all(result == "QmWeb3CID789" for result in results)
@@ -373,17 +366,17 @@ class TestTelegramServiceIntegration:
         # Step 1: Prepare message data
         chat_id = "test_chat_id"
         message = "Test message from Lazarus Protocol"
-        
+
         # Step 2: Send Telegram message
         success = mock_telegram(
             chat_id=chat_id,
             message=message
         )
-        
+
         # Step 3: Verify message was sent
         assert success == True
         mock_telegram.assert_called_once()
-        
+
         # Step 4: Verify call parameters
         call_args = mock_telegram.call_args
         assert call_args[1]['chat_id'] == chat_id
@@ -394,14 +387,14 @@ class TestTelegramServiceIntegration:
         # Step 1: Prepare message with markdown
         chat_id = "test_chat_id"
         message = "*Bold text* and _italic text_"
-        
+
         # Step 2: Send message with markdown
         success = mock_telegram(
             chat_id=chat_id,
             message=message,
             parse_mode="Markdown"
         )
-        
+
         # Step 3: Verify message was sent
         assert success == True
 
@@ -410,13 +403,13 @@ class TestTelegramServiceIntegration:
         # Step 1: Prepare long message
         chat_id = "test_chat_id"
         long_message = "This is a very long message. " * 100  # > 4000 characters
-        
+
         # Step 2: Send long message
         success = mock_telegram(
             chat_id=chat_id,
             message=long_message
         )
-        
+
         # Step 3: Verify message was sent
         assert success == True
 
@@ -424,13 +417,13 @@ class TestTelegramServiceIntegration:
         """Test Telegram message failure handling"""
         # Step 1: Configure mock to fail
         mock_telegram.return_value = False
-        
+
         # Step 2: Attempt to send message
         success = mock_telegram(
             chat_id="test_chat_id",
             message="Test message"
         )
-        
+
         # Step 3: Verify failure was handled
         assert success == False
 
@@ -444,16 +437,16 @@ class TestStorageProviderIntegration:
         test_file = temp_lazarus_dir / "test_file.txt"
         test_content = b"Test content for multi-provider"
         test_file.write_bytes(test_content)
-        
+
         # Step 2: Try IPFS first
         ipfs_cid = mock_ipfs['upload'](str(test_file))
         assert ipfs_cid == "QmTestCID123"
-        
+
         # Step 3: If IPFS fails, try Pinata
         if not ipfs_cid:
             pinata_cid = mock_pinata("QmTestCID123")
             assert pinata_cid == "QmPinataCID456"
-        
+
         # Step 4: If Pinata fails, try Web3.Storage
         if not ipfs_cid and not pinata_cid:
             web3_cid = mock_web3_storage(str(test_file))
@@ -467,7 +460,7 @@ class TestStorageProviderIntegration:
             pinata_api_key="test_pinata_key",
             web3_storage_token="test_web3_token"
         )
-        
+
         # Step 2: Verify configuration
         assert config.ipfs_gateway_url == "https://ipfs.io/ipfs/"
         assert config.pinata_api_key == "test_pinata_key"
@@ -478,7 +471,7 @@ class TestStorageProviderIntegration:
         # Step 1: Check IPFS status
         # In real scenario, would ping IPFS gateway
         ipfs_status = "available"  # Mock status
-        
+
         # Step 2: Verify status
         assert ipfs_status == "available"
 
@@ -495,17 +488,17 @@ class TestAPIServiceIntegration:
             "Content-Type": "application/json"
         }
         data = {"key": "value"}
-        
+
         # Step 2: Mock API call
         with patch('requests.post') as mock_post:
             mock_response = MagicMock()
             mock_response.status_code = 200
             mock_response.json.return_value = {"success": True}
             mock_post.return_value = mock_response
-            
+
             # Step 3: Make API call
             response = mock_post(api_url, headers=headers, json=data)
-            
+
             # Step 4: Verify response
             assert response.status_code == 200
             assert response.json()["success"] == True
@@ -517,16 +510,16 @@ class TestAPIServiceIntegration:
             mock_response_success = MagicMock()
             mock_response_success.status_code = 200
             mock_response_success.json.return_value = {"success": True}
-            
+
             mock_response_failure = MagicMock()
             mock_response_failure.status_code = 500
-            
+
             mock_post.side_effect = [mock_response_failure, mock_response_success]
-            
+
             # Step 2: Make API call with retry
             # In real scenario, would implement retry logic
             response = mock_post("https://api.example.com/endpoint")
-            
+
             # Step 3: Verify retry
             assert mock_post.call_count == 2
 
@@ -536,7 +529,7 @@ class TestAPIServiceIntegration:
         with patch('requests.post') as mock_post:
             import requests
             mock_post.side_effect = requests.Timeout("Request timed out")
-            
+
             # Step 2: Attempt API call
             try:
                 response = mock_post("https://api.example.com/endpoint", timeout=5)
@@ -558,19 +551,19 @@ class TestWebhookIntegration:
             "timestamp": datetime.now(UTC).isoformat(),
             "data": {"user_id": 123}
         }
-        
+
         # Step 2: Send webhook
         with patch('requests.post') as mock_post:
             mock_response = MagicMock()
             mock_response.status_code = 200
             mock_post.return_value = mock_response
-            
+
             response = mock_post(webhook_url, json=payload)
-            
+
             # Step 3: Verify delivery
             assert response.status_code == 200
             mock_post.assert_called_once()
-            
+
             # Step 4: Verify payload
             call_args = mock_post.call_args
             assert call_args[1]['json'] == payload
@@ -580,20 +573,20 @@ class TestWebhookIntegration:
         # Step 1: Configure mock to fail then succeed
         webhook_url = "https://example.com/webhook"
         payload = {"event": "test"}
-        
+
         with patch('requests.post') as mock_post:
             mock_response_success = MagicMock()
             mock_response_success.status_code = 200
-            
+
             mock_response_failure = MagicMock()
             mock_response_failure.status_code = 500
-            
+
             mock_post.side_effect = [mock_response_failure, mock_response_success]
-            
+
             # Step 2: Send webhook with retry
             # In real scenario, would implement retry logic
             response = mock_post(webhook_url, json=payload)
-            
+
             # Step 3: Verify retry
             assert mock_post.call_count == 2
 
@@ -603,28 +596,28 @@ class TestWebhookIntegration:
         webhook_url = "https://example.com/webhook"
         payload = {"event": "test"}
         secret = "webhook_secret"
-        
+
         # Step 2: Generate signature
-        import hmac
         import hashlib
+        import hmac
         signature = hmac.new(
             secret.encode(),
             json.dumps(payload).encode(),
             hashlib.sha256
         ).hexdigest()
-        
+
         # Step 3: Send webhook with signature
         with patch('requests.post') as mock_post:
             mock_response = MagicMock()
             mock_response.status_code = 200
             mock_post.return_value = mock_response
-            
+
             headers = {
                 "X-Webhook-Signature": signature,
                 "Content-Type": "application/json"
             }
             response = mock_post(webhook_url, json=payload, headers=headers)
-            
+
             # Step 4: Verify delivery
             assert response.status_code == 200
 

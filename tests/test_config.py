@@ -3,12 +3,15 @@
 import os
 import sys
 
-import pytest
-
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from core.config import LazarusConfig, BeneficiaryConfig, VaultConfig
-from core.config import _config_to_dict, _config_from_dict
+from core.config import (
+    BeneficiaryConfig,
+    LazarusConfig,
+    VaultConfig,
+    _config_from_dict,
+    _config_to_dict,
+)
 
 
 class TestConfigDefaults:

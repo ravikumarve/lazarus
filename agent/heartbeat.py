@@ -35,9 +35,9 @@ import os
 import signal
 import sys
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(
@@ -71,33 +71,33 @@ def _sanitize_config_for_logging(config) -> dict:
 
 
 # Module-level imports so unittest.mock.patch() can intercept them in tests
+from agent.alerts import (
+    AlertError,
+    email_configured,
+    send_delivery_email,
+    send_final_warning,
+    send_reminder_email,
+    send_telegram_alert,
+    telegram_configured,
+)
 from core.config import (
+    CONFIG_PATH,
+    config_exists,
+    days_remaining,
+    days_since_checkin,
+    disarm,
+    is_trigger_due,
     load_config,
     save_config,
-    config_exists,
-    days_since_checkin,
-    days_remaining,
-    is_trigger_due,
-    disarm,
-    CONFIG_PATH,
 )
-from agent.alerts import (
-    send_reminder_email,
-    send_telegram_alert,
-    send_final_warning,
-    send_delivery_email,
-    email_configured,
-    telegram_configured,
-    AlertError,
-)
+
 from .alerts import (
+    email_configured,
+    send_delivery_email,
+    send_final_warning,
     send_reminder_email,
     send_telegram_alert,
-    send_final_warning,
-    send_delivery_email,
-    email_configured,
     telegram_configured,
-    AlertError,
 )
 
 # Escalation thresholds — days without a check-in
@@ -178,11 +178,11 @@ def start_agent(config_path: Optional[Path] = None) -> None:
 
     try:
         from apscheduler.schedulers.blocking import BlockingScheduler
-    except ImportError as exc:
+    except ImportError:
         logger.error("APScheduler not installed. Run: pip install APScheduler")
         raise
 
-    from core.config import load_config, config_exists, CONFIG_PATH
+    from core.config import CONFIG_PATH
 
     check_path = Path(config_path) if config_path else CONFIG_PATH
     _agent_config_path = check_path  # Store for watchdog recovery
@@ -265,6 +265,88 @@ def _sigterm_handler(signum, frame):
 # ---------------------------------------------------------------------------
 
 
+def _load_heartbeat_config(config_path: Optional[Path]) -> Optional[Any]:
+    """Load heartbeat config with error handling. Returns None on failure."""
+    check_path = Path(config_path) if config_path else CONFIG_PATH
+    try:
+        return load_config(config_path=check_path)
+    except FileNotFoundError:
+        logger.error("Config not found — agent cannot run without initialisation.")
+        return None
+    except Exception as exc:
+        logger.error("Failed to load config: %s", exc)
+        return None
+
+
+def _reset_alert_dedup_state(since: float) -> None:
+    """Reset dedup flags for thresholds the owner has recently passed."""
+    global _alert_state
+    if since < REMINDER_DAY:
+        _alert_state.reminder_sent = False
+    if since < TELEGRAM_DAY:
+        _alert_state.telegram_sent = False
+    if since < FINAL_WARN_DAY:
+        _alert_state.final_warn_sent = False
+
+
+def _handle_trigger_check(
+    config, config_path: Path, since: float
+) -> bool:
+    """Check and fire trigger if overdue. Returns True if trigger was handled."""
+    global _alert_state
+    if not is_trigger_due(config):
+        return False
+    if not _alert_state.triggered:
+        logger.critical(
+            "TRIGGER: days elapsed %.1f >= interval %d. Firing.",
+            since,
+            config.checkin_interval_days,
+        )
+        trigger_delivery(config_path=config_path)
+        _alert_state.triggered = True
+    else:
+        logger.warning("Trigger already fired and disarmed — no action.")
+    return True
+
+
+def _run_escalation_ladder(config, since: float, remaining: float) -> None:
+    """Walk the escalation ladder: reminder → Telegram → final warning."""
+    global _alert_state
+    if since >= FINAL_WARN_DAY and not _alert_state.final_warn_sent:
+        logger.warning("Day %.1f: sending final warning.", since)
+        _fire_alert(
+            lambda: send_final_warning(
+                owner_email=config.owner_email,
+                days_remaining=remaining,
+                chat_id=config.telegram_chat_id,
+            ),
+            label="final warning",
+        )
+        _alert_state.final_warn_sent = True
+    elif since >= TELEGRAM_DAY and not _alert_state.telegram_sent:
+        if config.telegram_chat_id and telegram_configured():
+            logger.info("Day %.1f: sending Telegram alert.", since)
+            _fire_alert(
+                lambda: send_telegram_alert(
+                    chat_id=config.telegram_chat_id,
+                    days_remaining=remaining,
+                ),
+                label="Telegram alert",
+            )
+        _alert_state.telegram_sent = True
+    elif since >= REMINDER_DAY and not _alert_state.reminder_sent:
+        if email_configured():
+            logger.info("Day %.1f: sending reminder email.", since)
+            _fire_alert(
+                lambda: send_reminder_email(
+                    owner_email=config.owner_email,
+                    days_remaining=remaining,
+                ),
+                label="reminder email",
+            )
+        _alert_state.reminder_sent = True
+
+
 def heartbeat_job(config_path: Optional[Path] = None) -> None:
     """
     Main recurring job — runs every hour.
@@ -279,15 +361,8 @@ def heartbeat_job(config_path: Optional[Path] = None) -> None:
     """
     global _alert_state
 
-    check_path = Path(config_path) if config_path else CONFIG_PATH
-
-    try:
-        config = load_config(config_path=check_path)
-    except FileNotFoundError:
-        logger.error("Config not found — agent cannot run without initialisation.")
-        return
-    except Exception as exc:
-        logger.error("Failed to load config: %s", exc)
+    config = _load_heartbeat_config(config_path)
+    if config is None:
         return
 
     if not config.armed:
@@ -304,69 +379,18 @@ def heartbeat_job(config_path: Optional[Path] = None) -> None:
         config.armed,
     )
 
-    # Reset dedup state if the owner has recently checked in below each threshold
-    if since < REMINDER_DAY:
-        _alert_state.reminder_sent = False
-    if since < TELEGRAM_DAY:
-        _alert_state.telegram_sent = False
-    if since < FINAL_WARN_DAY:
-        _alert_state.final_warn_sent = False
+    _reset_alert_dedup_state(since)
 
-    # --- Trigger check (highest priority) ---
-    if is_trigger_due(config):
-        if not _alert_state.triggered:
-            logger.critical(
-                "TRIGGER: days elapsed %.1f >= interval %d. Firing.",
-                since,
-                config.checkin_interval_days,
-            )
-            trigger_delivery(config_path=check_path)
-            _alert_state.triggered = True
-        else:
-            logger.warning("Trigger already fired and disarmed — no action.")
+    # Trigger check (highest priority)
+    if _handle_trigger_check(config, config_path, since):
         return
 
-    # --- Escalation ladder ---
-    if since >= FINAL_WARN_DAY and not _alert_state.final_warn_sent:
-        logger.warning("Day %.1f: sending final warning.", since)
-        _fire_alert(
-            lambda: send_final_warning(
-                owner_email=config.owner_email,
-                days_remaining=remaining,
-                chat_id=config.telegram_chat_id,
-            ),
-            label="final warning",
-        )
-        _alert_state.final_warn_sent = True
-
-    elif since >= TELEGRAM_DAY and not _alert_state.telegram_sent:
-        if config.telegram_chat_id and telegram_configured():
-            logger.info("Day %.1f: sending Telegram alert.", since)
-            _fire_alert(
-                lambda: send_telegram_alert(
-                    chat_id=config.telegram_chat_id,
-                    days_remaining=remaining,
-                ),
-                label="Telegram alert",
-            )
-        _alert_state.telegram_sent = True
-
-    elif since >= REMINDER_DAY and not _alert_state.reminder_sent:
-        if email_configured():
-            logger.info("Day %.1f: sending reminder email.", since)
-            _fire_alert(
-                lambda: send_reminder_email(
-                    owner_email=config.owner_email,
-                    days_remaining=remaining,
-                ),
-                label="reminder email",
-            )
-        _alert_state.reminder_sent = True
+    # Escalation ladder
+    _run_escalation_ladder(config, since, remaining)
 
 
 def _fire_alert(fn, label: str) -> None:
     """Call an alert function, logging but not re-raising on failure."""
-    from agent.alerts import AlertError
 
     try:
         fn()

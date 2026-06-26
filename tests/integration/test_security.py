@@ -10,28 +10,23 @@ Tests for security integration across components:
 """
 
 import os
-import pytest
-import tempfile
 import shutil
-from pathlib import Path
-from datetime import datetime, UTC, timedelta
-from unittest.mock import patch, MagicMock
+import tempfile
 import time
-import hmac
-import hashlib
-import json
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 from core.config import (
-    load_config,
-    save_config,
     LAZARUS_DIR,
 )
-from core.security import (
-    verify_api_key,
-    key_manager,
-)
-from core.database import DatabaseManager, DatabaseConfig
+from core.database import DatabaseConfig, DatabaseManager
 from core.rate_limiter import DistributedRateLimiter
+from core.security import (
+    key_manager,
+    verify_api_key,
+)
 
 
 @pytest.fixture
@@ -39,13 +34,13 @@ def temp_lazarus_dir():
     """Create temporary Lazarus directory for testing"""
     temp_dir = tempfile.mkdtemp()
     original_dir = LAZARUS_DIR
-    
+
     # Override LAZARUS_DIR for testing
     import core.config
     core.config.LAZARUS_DIR = Path(temp_dir)
-    
+
     yield Path(temp_dir)
-    
+
     # Cleanup
     shutil.rmtree(temp_dir, ignore_errors=True)
     core.config.LAZARUS_DIR = original_dir
@@ -82,10 +77,10 @@ def mock_redis():
         mock_redis.set.return_value = True
         mock_redis.incr.return_value = 1
         mock_redis.expire.return_value = True
-        
+
         # Mock pipeline for rate limiter - use side_effect to track state
         pipe_data = {'count': 0, 'backoff': None, 'window_start': None}
-        
+
         def pipe_get(key):
             if key.endswith(':count'):
                 return pipe_data['count']
@@ -94,7 +89,7 @@ def mock_redis():
             elif key.endswith(':window_start'):
                 return pipe_data['window_start']
             return None
-        
+
         def pipe_set(key, value, **kwargs):
             if key.endswith(':backoff'):
                 pipe_data['backoff'] = value
@@ -103,18 +98,18 @@ def mock_redis():
             elif key.endswith(':count'):
                 pipe_data['count'] = value
             return True
-        
+
         def pipe_incr(key):
             if key.endswith(':count'):
                 pipe_data['count'] = pipe_data.get('count', 0) + 1
             return pipe_data['count']
-        
+
         def pipe_execute():
             c = pipe_data.get('count', 0) or 0
             b = pipe_data.get('backoff')
             w = pipe_data.get('window_start') or time.time()
             return [c, b, w, -1]
-        
+
         mock_pipe = MagicMock()
         mock_pipe.get.side_effect = pipe_get
         mock_pipe.set.side_effect = pipe_set
@@ -123,9 +118,9 @@ def mock_redis():
         mock_pipe.expire.return_value = True
         mock_pipe.ttl.return_value = -1
         mock_pipe.delete.return_value = True
-        
+
         mock_redis.pipeline.return_value = mock_pipe
-        
+
         yield mock_redis
 
 
@@ -137,11 +132,11 @@ class TestAuthenticationIntegration:
         # Step 1: Verify API key
         result = verify_api_key(test_api_key)
         assert result == True
-        
+
         # Step 2: Test invalid API key
         invalid_result = verify_api_key("invalid_api_key")
         assert invalid_result == False
-        
+
         # Step 3: Test empty API key
         empty_result = verify_api_key("")
         assert empty_result == False
@@ -155,15 +150,15 @@ class TestAuthenticationIntegration:
             password_hash="hashed_password_123",
             api_key="test_api_key_12345678901234567890"
         )
-        
+
         # Step 2: Retrieve user by API key
         user = test_database.get_user_by_api_key("test_api_key_12345678901234567890")
-        
+
         # Step 3: Verify authentication
         assert user is not None
         assert user['username'] == 'testuser'
         assert user['email'] == 'test@example.com'
-        
+
         # Step 4: Test invalid API key
         invalid_user = test_database.get_user_by_api_key("invalid_api_key")
         assert invalid_user is None
@@ -177,7 +172,7 @@ class TestAuthenticationIntegration:
             password_hash="hashed_password_123",
             api_key="admin_api_key_12345678901234567890"
         )
-        
+
         # Step 2: Create regular user
         user_id = test_database.create_user(
             username="user",
@@ -185,12 +180,12 @@ class TestAuthenticationIntegration:
             password_hash="hashed_password_456",
             api_key="user_api_key_12345678901234567890"
         )
-        
+
         # Step 3: Verify admin can access admin resources
         admin_user = test_database.get_user_by_api_key("admin_api_key_12345678901234567890")
         assert admin_user is not None
         assert admin_user['username'] == 'admin'
-        
+
         # Step 4: Verify regular user can access user resources
         regular_user = test_database.get_user_by_api_key("user_api_key_12345678901234567890")
         assert regular_user is not None
@@ -202,45 +197,45 @@ class TestEncryptionIntegration:
 
     def test_data_encryption_decryption_flow(self, temp_lazarus_dir):
         """Test complete encryption and decryption flow"""
-        from core.encryption import encrypt_data, decrypt_data
-        
+        from core.encryption import decrypt_data, encrypt_data
+
         # Step 1: Prepare test data
         test_data = b"Sensitive data that needs encryption"
         encryption_key = b"test_encryption_key_32bytes!!!!!"
-        
+
         # Step 2: Encrypt data
         encrypted_data = encrypt_data(test_data, encryption_key)
-        
+
         # Step 3: Verify encryption
         assert encrypted_data != test_data
         assert len(encrypted_data) > len(test_data)
-        
+
         # Step 4: Decrypt data
         decrypted_data = decrypt_data(encrypted_data, encryption_key)
-        
+
         # Step 5: Verify decryption
         assert decrypted_data == test_data
 
     def test_file_encryption_with_storage(self, temp_lazarus_dir):
         """Test file encryption with storage integration"""
-        from core.encryption import encrypt_data, decrypt_data
-        
+        from core.encryption import decrypt_data, encrypt_data
+
         # Step 1: Create test file
         test_file = temp_lazarus_dir / "test_secret.txt"
         test_content = b"Secret file content"
         test_file.write_bytes(test_content)
-        
+
         # Step 2: Encrypt file content
         encryption_key = b"test_encryption_key_32bytes!!!!!"
         encrypted_content = encrypt_data(test_content, encryption_key)
-        
+
         # Step 3: Verify encrypted content
         assert encrypted_content != test_content
         assert len(encrypted_content) > len(test_content)
-        
+
         # Step 4: Decrypt content
         decrypted_content = decrypt_data(encrypted_content, encryption_key)
-        
+
         # Step 5: Verify decrypted content matches original
         assert decrypted_content == test_content
 
@@ -249,17 +244,17 @@ class TestEncryptionIntegration:
         # Step 1: Derive key from password
         password = "user_password_123"
         salt = b"test_salt_16bytes"
-        
+
         derived_key = key_manager.derive_key(password, salt)
-        
+
         # Step 2: Verify key derivation
         assert derived_key is not None
         assert len(derived_key) == 32  # 256 bits
-        
+
         # Step 3: Verify deterministic derivation
         derived_key_2 = key_manager.derive_key(password, salt)
         assert derived_key == derived_key_2
-        
+
         # Step 4: Verify different passwords produce different keys
         different_key = key_manager.derive_key("different_password", salt)
         assert derived_key != different_key
@@ -276,12 +271,12 @@ class TestInputValidationIntegration:
             "user.name@example.com",
             "user+tag@example.com"
         ]
-        
+
         for email in valid_emails:
             # In real scenario, would validate email format
             assert "@" in email
             assert "." in email
-        
+
         # Step 2: Test invalid emails
         invalid_emails = [
             "invalid",
@@ -289,7 +284,7 @@ class TestInputValidationIntegration:
             "@example.com",
             "invalid@.com"
         ]
-        
+
         for email in invalid_emails:
             # In real scenario, would reject invalid emails
             assert True  # Placeholder for validation logic
@@ -302,18 +297,18 @@ class TestInputValidationIntegration:
             "/path/to/directory/",
             "relative/path/file.txt"
         ]
-        
+
         for path in valid_paths:
             # In real scenario, would validate path format
             assert len(path) > 0
-        
+
         # Step 2: Test path traversal attempts
         malicious_paths = [
             "../../../etc/passwd",
             "/path/to/../../../etc/passwd",
             "..\\..\\..\\windows\\system32"
         ]
-        
+
         for path in malicious_paths:
             # In real scenario, would reject path traversal
             assert True  # Placeholder for validation logic
@@ -325,11 +320,11 @@ class TestInputValidationIntegration:
             "test_api_key_12345678901234567890",
             "another_key_abcdefghijklmnopqrstuvwxyz123456"
         ]
-        
+
         for key in valid_keys:
             # In real scenario, would validate key format
             assert len(key) >= 32
-        
+
         # Step 2: Test invalid API keys
         invalid_keys = [
             "",
@@ -337,7 +332,7 @@ class TestInputValidationIntegration:
             "key with spaces",
             "key\nwith\nnewlines"
         ]
-        
+
         for key in invalid_keys:
             # In real scenario, would reject invalid keys
             assert True  # Placeholder for validation logic
@@ -350,12 +345,12 @@ class TestInputValidationIntegration:
             "owner_email": "test@example.com",
             "checkin_interval_days": 30
         }
-        
+
         # Step 2: Verify JSON structure
         assert "owner_name" in valid_json
         assert "owner_email" in valid_json
         assert "checkin_interval_days" in valid_json
-        
+
         # Step 3: Test JSON with extra fields
         json_with_extra = {
             "owner_name": "Test Owner",
@@ -363,7 +358,7 @@ class TestInputValidationIntegration:
             "checkin_interval_days": 30,
             "malicious_field": "malicious_value"
         }
-        
+
         # In real scenario, would sanitize extra fields
         assert True  # Placeholder for sanitization logic
 
@@ -379,12 +374,12 @@ class TestRateLimitingSecurity:
             default_limit=10,
             default_window=60
         )
-        
+
         # Step 2: Test rate limit enforcement
         identifier = "test_user"
         allowed_count = 0
         denied_count = 0
-        
+
         for i in range(15):
             allowed, remaining = limiter.is_allowed(
                 identifier=identifier,
@@ -395,7 +390,7 @@ class TestRateLimitingSecurity:
                 allowed_count += 1
             else:
                 denied_count += 1
-        
+
         # Step 3: Verify rate limiting
         assert allowed_count == 10  # First 10 allowed
         assert denied_count == 5  # Last 5 denied
@@ -408,11 +403,11 @@ class TestRateLimitingSecurity:
             default_limit=5,
             default_window=60
         )
-        
+
         # Step 2: Test rate limiting by IP
         ip_address = "192.168.1.1"
         allowed_count = 0
-        
+
         for i in range(10):
             allowed, remaining = limiter.is_allowed(
                 identifier=f"ip:{ip_address}",
@@ -421,7 +416,7 @@ class TestRateLimitingSecurity:
             )
             if allowed:
                 allowed_count += 1
-        
+
         # Step 3: Verify rate limiting
         assert allowed_count == 5
 
@@ -433,11 +428,11 @@ class TestRateLimitingSecurity:
             default_limit=20,
             default_window=60
         )
-        
+
         # Step 2: Test rate limiting by user
         user_id = "user_123"
         allowed_count = 0
-        
+
         for i in range(25):
             allowed, remaining = limiter.is_allowed(
                 identifier=f"user:{user_id}",
@@ -446,7 +441,7 @@ class TestRateLimitingSecurity:
             )
             if allowed:
                 allowed_count += 1
-        
+
         # Step 3: Verify rate limiting
         assert allowed_count == 20
 
@@ -458,11 +453,11 @@ class TestSessionManagementSecurity:
         """Test session key generation"""
         # Step 1: Generate CSRF token for session
         csrf_token = key_manager.generate_csrf_token()
-        
+
         # Step 2: Verify token
         assert csrf_token is not None
         assert len(csrf_token) > 0
-        
+
         # Step 3: Verify token uniqueness
         csrf_token_2 = key_manager.generate_csrf_token()
         assert csrf_token != csrf_token_2
@@ -471,13 +466,13 @@ class TestSessionManagementSecurity:
         """Test session key validation"""
         # Step 1: Generate CSRF token
         csrf_token = key_manager.generate_csrf_token()
-        
+
         # Step 2: Validate token
         is_valid = key_manager.verify_csrf_token(
             request=MagicMock(),
             token=csrf_token
         )
-        
+
         # Step 3: Verify validation
         # Note: In real scenario, would validate against session
         assert csrf_token is not None
@@ -486,10 +481,10 @@ class TestSessionManagementSecurity:
         """Test session key expiration"""
         # Step 1: Generate CSRF token
         csrf_token = key_manager.generate_csrf_token()
-        
+
         # Step 2: Verify token exists
         assert csrf_token is not None
-        
+
         # Step 3: Note: CSRF tokens don't expire in the same way as session keys
         # This test verifies token generation works
         assert True
@@ -498,10 +493,10 @@ class TestSessionManagementSecurity:
         """Test session key device binding"""
         # Step 1: Generate CSRF token
         csrf_token = key_manager.generate_csrf_token()
-        
+
         # Step 2: Verify token
         assert csrf_token is not None
-        
+
         # Step 3: Note: CSRF tokens are session-based, not device-bound
         # This test verifies token generation works
         assert True
@@ -515,11 +510,11 @@ class TestCSRFProtection:
         # Step 1: Generate CSRF token
         session_id = "test_session_123"
         csrf_token = key_manager.generate_csrf_token(session_id)
-        
+
         # Step 2: Verify token
         assert csrf_token is not None
         assert len(csrf_token) > 0
-        
+
         # Step 3: Verify token uniqueness
         csrf_token_2 = key_manager.generate_csrf_token(session_id)
         assert csrf_token != csrf_token_2
@@ -529,10 +524,10 @@ class TestCSRFProtection:
         # Step 1: Generate CSRF token
         session_id = "test_session_123"
         csrf_token = key_manager.generate_csrf_token(session_id)
-        
+
         # Step 2: Validate token
         is_valid = key_manager.validate_csrf_token(csrf_token, session_id=session_id)
-        
+
         # Step 3: Verify validation
         assert is_valid == True
 
@@ -541,14 +536,14 @@ class TestCSRFProtection:
         # Step 1: Generate CSRF token
         session_id = "test_session_123"
         csrf_token = key_manager.generate_csrf_token(session_id)
-        
+
         # Step 2: Validate token first time
         is_valid_1 = key_manager.validate_csrf_token(csrf_token, session_id=session_id)
         assert is_valid_1 == True
-        
+
         # Step 3: Try to reuse token
         is_valid_2 = key_manager.validate_csrf_token(csrf_token, session_id=session_id)
-        
+
         # Step 4: Verify reuse prevention
         assert is_valid_2 == False
 
@@ -566,7 +561,7 @@ class TestSecurityHeaders:
             "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
             "Content-Security-Policy": "default-src 'self'"
         }
-        
+
         # Step 2: Verify headers are defined
         # In real scenario, would check actual HTTP response headers
         for header_name, header_value in expected_headers.items():
@@ -580,7 +575,7 @@ class TestSecurityHeaders:
             "https://lazarusprotocol.com",
             "https://www.lazarusprotocol.com"
         ]
-        
+
         # Step 2: Verify CORS configuration
         # In real scenario, would check actual CORS headers
         for origin in allowed_origins:
@@ -599,7 +594,7 @@ class TestAuditLogging:
             password_hash="hashed_password_123",
             api_key="test_api_key_12345678901234567890"
         )
-        
+
         # Step 2: Log security event
         event_id = test_database.log_security_event(
             user_id=user_id,
@@ -608,14 +603,14 @@ class TestAuditLogging:
             user_agent="TestAgent/1.0",
             details={"method": "api_key"}
         )
-        
+
         # Step 3: Verify event was logged
         assert event_id is not None
         assert event_id > 0
-        
+
         # Step 4: Retrieve security events
         events = test_database.get_security_events(user_id, limit=10)
-        
+
         # Step 5: Verify event details
         assert len(events) == 1
         assert events[0]['event_type'] == 'login_success'
@@ -630,7 +625,7 @@ class TestAuditLogging:
             password_hash="hashed_password_123",
             api_key="test_api_key_12345678901234567890"
         )
-        
+
         # Step 2: Log failed login attempt
         event_id = test_database.log_security_event(
             user_id=user_id,
@@ -639,13 +634,13 @@ class TestAuditLogging:
             user_agent="MaliciousAgent/1.0",
             details={"reason": "invalid_api_key"}
         )
-        
+
         # Step 3: Verify event was logged
         assert event_id is not None
-        
+
         # Step 4: Retrieve security events
         events = test_database.get_security_events(user_id, limit=10)
-        
+
         # Step 5: Verify failed login event
         assert len(events) == 1
         assert events[0]['event_type'] == 'login_failed'

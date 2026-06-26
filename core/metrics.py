@@ -12,15 +12,21 @@ Provides:
 
 import os
 import time
-import psutil
+from datetime import datetime
 from functools import wraps
 from typing import Callable, Optional
-from datetime import datetime
+
+import psutil
 
 try:
     from prometheus_client import (
-        Counter, Histogram, Gauge, Info, start_http_server,
-        CollectorRegistry, generate_latest
+        CollectorRegistry,
+        Counter,
+        Gauge,
+        Histogram,
+        Info,
+        generate_latest,
+        start_http_server,
     )
     PROMETHEUS_AVAILABLE = True
 except ImportError:
@@ -217,7 +223,7 @@ def record_api_request(method: str, endpoint: str, status: int, duration: float)
     """Record API request metrics"""
     if not PROMETHEUS_AVAILABLE:
         return
-    
+
     api_requests_total.labels(
         method=method,
         endpoint=endpoint,
@@ -233,7 +239,7 @@ def record_storage_upload(provider: str, status: str, duration: float):
     """Record storage upload metrics"""
     if not PROMETHEUS_AVAILABLE:
         return
-    
+
     storage_uploads_total.labels(
         provider=provider,
         status=status
@@ -247,7 +253,7 @@ def record_storage_download(provider: str, status: str, duration: float):
     """Record storage download metrics"""
     if not PROMETHEUS_AVAILABLE:
         return
-    
+
     storage_downloads_total.labels(
         provider=provider,
         status=status
@@ -261,7 +267,7 @@ def record_email_send(email_type: str, status: str, duration: float):
     """Record email send metrics"""
     if not PROMETHEUS_AVAILABLE:
         return
-    
+
     email_sends_total.labels(
         type=email_type,
         status=status
@@ -275,16 +281,16 @@ def update_system_metrics():
     """Update system metrics"""
     if not PROMETHEUS_AVAILABLE:
         return
-    
+
     try:
         process = psutil.Process(os.getpid())
-        
+
         # Memory usage
         memory_usage_bytes.set(process.memory_info().rss)
-        
+
         # CPU usage
         cpu_usage_percent.set(process.cpu_percent())
-        
+
         # Disk usage
         for partition in psutil.disk_partitions():
             try:
@@ -307,7 +313,7 @@ def update_business_metrics(
     """Update business metrics"""
     if not PROMETHEUS_AVAILABLE:
         return
-    
+
     active_configurations.set(active_configs)
     pending_checkins.set(pending)
     documents_stored.set(docs)
@@ -325,17 +331,17 @@ def track_api_call(func: Callable) -> Callable:
         start = time.time()
         method = kwargs.get('method', 'GET')
         endpoint = func.__name__
-        
+
         try:
             result = await func(*args, **kwargs)
             duration = time.time() - start
             record_api_request(method, endpoint, 200, duration)
             return result
-        except Exception as e:
+        except Exception:
             duration = time.time() - start
             record_api_request(method, endpoint, 500, duration)
             raise
-    
+
     return wrapper
 
 
@@ -346,17 +352,17 @@ def track_sync_api_call(func: Callable) -> Callable:
         start = time.time()
         method = kwargs.get('method', 'GET')
         endpoint = func.__name__
-        
+
         try:
             result = func(*args, **kwargs)
             duration = time.time() - start
             record_api_request(method, endpoint, 200, duration)
             return result
-        except Exception as e:
+        except Exception:
             duration = time.time() - start
             record_api_request(method, endpoint, 500, duration)
             raise
-    
+
     return wrapper
 
 
@@ -369,11 +375,11 @@ def start_metrics_server(port: int = 9090):
     if not PROMETHEUS_AVAILABLE:
         print("Warning: Prometheus client not available. Metrics server not started.")
         return
-    
+
     try:
         start_http_server(port, registry=registry)
         print(f"Metrics server started on port {port}")
-        
+
         # Set application info
         app_info.info({
             'version': os.environ.get('APP_VERSION', '1.0.0'),
@@ -389,7 +395,7 @@ def get_metrics() -> Optional[str]:
     """Get metrics in Prometheus format"""
     if not PROMETHEUS_AVAILABLE:
         return None
-    
+
     try:
         return generate_latest(registry).decode('utf-8')
     except Exception as e:
@@ -403,7 +409,7 @@ def get_metrics() -> Optional[str]:
 
 class MetricsContext:
     """Context manager for tracking operation metrics"""
-    
+
     def __init__(self, operation_type: str, labels: dict = None):
         """
         Initialize metrics context.
@@ -416,41 +422,41 @@ class MetricsContext:
         self.labels = labels or {}
         self.start_time = None
         self.status = 'success'
-    
+
     def __enter__(self):
         """Start timing operation"""
         self.start_time = time.time()
         return self
-    
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Record metrics on exit"""
         if self.start_time is None:
             return
-        
+
         duration = time.time() - self.start_time
-        
+
         if exc_type is not None:
             self.status = 'error'
-        
+
         # Record based on operation type
         if self.operation_type == 'api_request':
             method = self.labels.get('method', 'GET')
             endpoint = self.labels.get('endpoint', 'unknown')
             status_code = self.labels.get('status_code', 500 if self.status == 'error' else 200)
             record_api_request(method, endpoint, status_code, duration)
-        
+
         elif self.operation_type == 'storage_upload':
             provider = self.labels.get('provider', 'unknown')
             record_storage_upload(provider, self.status, duration)
-        
+
         elif self.operation_type == 'storage_download':
             provider = self.labels.get('provider', 'unknown')
             record_storage_download(provider, self.status, duration)
-        
+
         elif self.operation_type == 'email_send':
             email_type = self.labels.get('type', 'unknown')
             record_email_send(email_type, self.status, duration)
-        
+
         return False  # Don't suppress exceptions
 
 
@@ -471,17 +477,17 @@ def get_registry():
 if __name__ == "__main__":
     # Test metrics collection
     print("Testing metrics collection...")
-    
+
     if PROMETHEUS_AVAILABLE:
         # Record some test metrics
         record_api_request('GET', '/status', 200, 0.05)
         record_api_request('POST', '/ping', 200, 0.1)
         record_storage_upload('local', 'success', 2.5)
         record_email_send('checkin', 'success', 1.2)
-        
+
         # Update system metrics
         update_system_metrics()
-        
+
         # Update business metrics
         update_business_metrics(
             active_configs=10,
@@ -489,7 +495,7 @@ if __name__ == "__main__":
             docs=100,
             storage_bytes=1024 * 1024 * 100  # 100MB
         )
-        
+
         # Get metrics
         metrics = get_metrics()
         if metrics:

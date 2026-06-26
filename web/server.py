@@ -8,9 +8,9 @@ Access: http://localhost:5555
 
 import os
 import sys
-from pathlib import Path
-from datetime import datetime, UTC
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
+from pathlib import Path
 
 # Load .env file if present (before any other imports that need it)
 _env_path = Path(__file__).parent.parent / '.env'
@@ -21,40 +21,41 @@ if _env_path.exists():
     except ImportError:
         pass  # dotenv not installed, env must be set manually
 
-from fastapi import FastAPI, HTTPException, Request, Response, status
-from fastapi.responses import HTMLResponse, FileResponse, RedirectResponse, JSONResponse
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
 from typing import Optional
+
+from fastapi import FastAPI, HTTPException, Request, status
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from pydantic import BaseModel, Field
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from core.config import (
-    load_config,
-    save_config,
-    record_checkin,
-    days_since_checkin,
-    days_remaining,
-    extend_deadline,
-    LAZARUS_DIR,
-)
-from core.security import (
-    verify_api_key,
-    check_rate_limit,
-    get_security_headers,
-    validate_safe_path,
-    validate_file_size,
-    validate_filename,
-    sanitize_input,
-    log_security_event,
-    security,
-    key_manager,
-)
-from core.rate_limiter import get_distributed_rate_limiter, RateLimitConfig
-
 import asyncio
 import threading
+
 import psutil
+
+from core.config import (
+    LAZARUS_DIR,
+    days_remaining,
+    days_since_checkin,
+    extend_deadline,
+    load_config,
+    record_checkin,
+    save_config,
+)
+from core.rate_limiter import get_distributed_rate_limiter
+from core.security import (
+    get_security_headers,
+    key_manager,
+    log_security_event,
+    sanitize_input,
+    security,
+    validate_file_size,
+    validate_filename,
+    validate_safe_path,
+    verify_api_key,
+)
 
 # ---------------------------------------------------------------------------
 # Lifespan (startup / shutdown)
@@ -138,13 +139,13 @@ async def security_middleware(request: Request, call_next):
     # Check distributed rate limit (skip for static files)
     path = request.url.path
     is_static = any(path.endswith(ext) for ext in _STATIC_EXTENSIONS)
-    
+
     rate_result = None
     if not is_static:
         try:
             ip_address = request.client.host if request.client else "unknown"
             rate_result = distributed_limiter.is_allowed(ip_address)
-            
+
             if not rate_result.allowed:
                 log_security_event(
                     "RATE_LIMIT",
@@ -165,14 +166,14 @@ async def security_middleware(request: Request, call_next):
                 f"Error: {str(e)}",
                 level=40
             )
-    
+
     # Process request
     response = await call_next(request)
-    
+
     # Add security headers
     for key, value in get_security_headers().items():
         response.headers[key] = value
-    
+
     # Add rate limit headers (skip for static files — reuse rate_result from first call)
     if not is_static and rate_result is not None:
         if rate_result.remaining is not None:
@@ -180,7 +181,7 @@ async def security_middleware(request: Request, call_next):
             response.headers["X-RateLimit-Remaining"] = str(rate_result.remaining)
             if rate_result.reset_at:
                 response.headers["X-RateLimit-Reset"] = str(int(rate_result.reset_at.timestamp()))
-    
+
     return response
 
 # Add CORS middleware (restrictive)
@@ -203,7 +204,7 @@ def check_memory_usage():
         process = psutil.Process(os.getpid())
         memory_info = process.memory_info()
         memory_mb = memory_info.rss / 1024 / 1024
-        
+
         if memory_mb > _memory_threshold / 1024 / 1024:
             log_security_event(
                 "MEMORY_WARNING",
@@ -211,7 +212,7 @@ def check_memory_usage():
                 f"Memory usage {memory_mb:.2f}MB exceeds threshold",
                 level=30
             )
-            
+
             # Trigger aggressive cleanup
             aggressive_cleanup()
     except Exception as e:
@@ -229,10 +230,10 @@ def aggressive_cleanup():
         # Force Python garbage collection
         import gc
         gc.collect()
-        
+
         # Cleanup rate limiter aggressively
         distributed_limiter.cleanup()
-        
+
         log_security_event(
             "AGGRESSIVE_CLEANUP",
             "system",
@@ -505,7 +506,7 @@ async def get_status(request: Request):
     # Verify API key
     credentials = await security(request)
     verify_api_key(credentials)
-    
+
     try:
         config = load_config()
         since = days_since_checkin(config)
@@ -552,7 +553,7 @@ async def ping(request: Request, ping_request: PingRequest = None):
     # Verify API key
     credentials = await security(request)
     verify_api_key(credentials)
-    
+
     try:
         config = load_config()
         pin = ping_request.pin if ping_request else None
@@ -560,8 +561,8 @@ async def ping(request: Request, ping_request: PingRequest = None):
         # Sanitize PIN if provided
         if pin:
             pin = sanitize_input(pin, max_length=100)
-            
-            from core.duress import is_duress_pin, is_real_pin, trigger_duress_alert
+
+            from core.duress import is_duress_pin, trigger_duress_alert
 
             if is_duress_pin(config, pin):
                 trigger_duress_alert(config)
@@ -599,7 +600,7 @@ async def freeze(request: Request, freeze_request: FreezeRequest):
     # Verify API key
     credentials = await security(request)
     verify_api_key(credentials)
-    
+
     try:
         config = load_config()
         updated = extend_deadline(config, freeze_request.days)
@@ -629,11 +630,11 @@ async def events_endpoint(request: Request, limit: int = 50):
     # Verify API key
     credentials = await security(request)
     verify_api_key(credentials)
-    
+
     # Validate limit
     if limit < 1 or limit > 1000:
         raise HTTPException(status_code=400, detail="Limit must be between 1 and 1000")
-    
+
     return {"events": get_events(limit)}
 
 
@@ -643,7 +644,7 @@ async def get_bundle(request: Request):
     # Verify API key
     credentials = await security(request)
     verify_api_key(credentials)
-    
+
     try:
         from core.storage import get_bundle_manifest
 
@@ -661,14 +662,14 @@ async def add_document(request: Request, add_request: AddDocumentRequest):
     # Verify API key
     credentials = await security(request)
     verify_api_key(credentials)
-    
+
     try:
         from core.storage import add_document_to_bundle
 
         # Sanitize and validate file path
         file_path_str = sanitize_input(add_request.file_path, max_length=500)
         file_path = Path(file_path_str)
-        
+
         # Validate path is safe
         try:
             safe_path = validate_safe_path(file_path)
@@ -680,16 +681,16 @@ async def add_document(request: Request, add_request: AddDocumentRequest):
                 level=30
             )
             raise HTTPException(status_code=400, detail=str(e))
-        
+
         # Validate file size
         try:
             validate_file_size(safe_path)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
-        
+
         # Sanitize document type
         doc_type = sanitize_input(add_request.document_type or "OTHER", max_length=50)
-        
+
         doc_info = add_document_to_bundle(safe_path, doc_type)
         return {"success": True, "document": doc_info}
     except FileNotFoundError as e:
@@ -704,7 +705,7 @@ async def remove_document(request: Request, filename: str):
     # Verify API key
     credentials = await security(request)
     verify_api_key(credentials)
-    
+
     # Validate filename
     if not validate_filename(filename):
         log_security_event(
@@ -714,7 +715,7 @@ async def remove_document(request: Request, filename: str):
             level=30
         )
         raise HTTPException(status_code=400, detail="Invalid filename")
-    
+
     try:
         from core.storage import remove_document_from_bundle
 
@@ -800,11 +801,11 @@ async def create_session_key(
     # Verify API key
     credentials = await security(request)
     verify_api_key(credentials)
-    
+
     # Get client information
     user_agent = key_request.user_agent or request.headers.get("user-agent", "")
     ip_address = request.client.host if request.client else "unknown"
-    
+
     # Generate session key
     session_key = key_manager.generate_session_key(
         session_id=key_request.session_id,
@@ -812,14 +813,14 @@ async def create_session_key(
         ip_address=ip_address,
         device_fingerprint=key_request.device_fingerprint
     )
-    
+
     # Log security event
     log_security_event(
         "SESSION_KEY_CREATED",
         ip_address,
         f"Session ID: {key_request.session_id}, Key ID: {session_key.key_id}"
     )
-    
+
     return SessionKeyResponse(
         key_id=session_key.key_id,
         key=session_key.key,
@@ -847,26 +848,26 @@ async def rotate_session_key(
     # Verify API key
     credentials = await security(request)
     verify_api_key(credentials)
-    
+
     # Get client information
     ip_address = request.client.host if request.client else "unknown"
-    
+
     # Rotate key
     new_session_key = key_manager.rotate_key(rotation_request.key_id)
-    
+
     if not new_session_key:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Key not found or already expired"
         )
-    
+
     # Log security event
     log_security_event(
         "SESSION_KEY_ROTATED",
         ip_address,
         f"Old Key ID: {rotation_request.key_id}, New Key ID: {new_session_key.key_id}"
     )
-    
+
     return KeyRotationResponse(
         key_id=new_session_key.key_id,
         key=new_session_key.key,
@@ -894,16 +895,16 @@ async def validate_session_key(
     # Get client information
     user_agent = request.headers.get("user-agent", "")
     ip_address = request.client.host if request.client else "unknown"
-    
+
     # Validate session key
     session_key = key_manager.validate_session_key(key_id, user_agent, ip_address)
-    
+
     if not session_key:
         return {
             "valid": False,
             "reason": "Key not found, expired, or device binding mismatch"
         }
-    
+
     return {
         "valid": True,
         "key_id": session_key.key_id,
@@ -1013,7 +1014,6 @@ async def update_beneficiary(request: Request, ben: BeneficiaryUpdate):
     verify_api_key(credentials)
     try:
         config = load_config()
-        from dataclasses import replace
         from core.config import BeneficiaryConfig
         config.beneficiary = BeneficiaryConfig(
             name=sanitize_input(ben.name, 100),
@@ -1173,9 +1173,10 @@ def catch_all(full_path: str):
 
 
 if __name__ == "__main__":
-    import uvicorn
     import os
     from pathlib import Path
+
+    import uvicorn
 
     # Get configuration from environment variables
     port = int(os.environ.get("LAZARUS_PORT", 5555))
@@ -1195,17 +1196,17 @@ if __name__ == "__main__":
             protocol = "https"
         else:
             print(f"⚠️  SSL files not found: cert={ssl_cert_file}, key={ssl_key_file}")
-            print(f"⚠️  Falling back to HTTP")
+            print("⚠️  Falling back to HTTP")
             protocol = "http"
     else:
         protocol = "http"
 
     print(f"⚰️  Starting Lazarus Dashboard on {protocol}://{host}:{port}")
-    print(f"   - Change port: export LAZARUS_PORT=8000")
-    print(f"   - Change host: export LAZARUS_HOST=127.0.0.1")
+    print("   - Change port: export LAZARUS_PORT=8000")
+    print("   - Change host: export LAZARUS_HOST=127.0.0.1")
     if not ssl_config:
-        print(f"   - Enable HTTPS: export LAZARUS_SSL_CERT_FILE=/path/to/cert.pem")
-        print(f"   - Enable HTTPS: export LAZARUS_SSL_KEY_FILE=/path/to/key.pem")
+        print("   - Enable HTTPS: export LAZARUS_SSL_CERT_FILE=/path/to/cert.pem")
+        print("   - Enable HTTPS: export LAZARUS_SSL_KEY_FILE=/path/to/key.pem")
     print(f"   - Access dashboard: {protocol}://{host}:{port}")
 
     uvicorn.run(app, host=host, port=port, **ssl_config)
