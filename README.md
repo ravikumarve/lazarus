@@ -11,6 +11,12 @@
 </p>
 
 <p align="center">
+  <img src="https://img.shields.io/github/stars/ravikumarve/lazarus?style=social" />
+  <img src="https://img.shields.io/github/license/ravikumarve/lazarus" />
+  <img src="https://img.shields.io/badge/status-active-brightgreen" />
+</p>
+
+<p align="center">
   <!-- Security & Encryption -->
   <a href="SECURITY.md">
     <img src="https://img.shields.io/badge/Security-Military%20Grade-8b0000?style=for-the-badge&logo=shield-check" alt="Military Grade Security" />
@@ -853,6 +859,10 @@ print('✅ All dependencies installed successfully')
 | **Integration Tests** | ✅ 118 comprehensive tests | ❌ Minimal testing |
 | **Security Score** | ✅ 85/100 | ⚠️ Varies widely |
 | **Production Ready** | ✅ 90/100 | ⚠️ Often beta quality |
+
+## 🛒 Support the Project
+
+Star the repo, share it, or grab the Pro tier: [Buy on Gumroad](https://gumroad.com/ravikumarve)
 
 ## 📜 License
 
