@@ -1,21 +1,104 @@
-MIT License
+# LAZARUS Commercial License
 
-Copyright (c) 2025 Ravi Kumar
+Copyright (c) 2026 Ravi Kumar. All rights reserved.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+This software ("LAZARUS") is licensed, not sold. By purchasing, downloading, or
+using LAZARUS in any form, you agree to the terms below.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+---
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+## 1. Grant of License
+
+Upon a verified purchase, the copyright holder grants you a limited,
+non-exclusive, non-transferable, worldwide license to use LAZARUS according to
+the tier purchased. Paid tiers are enforced by the built-in Gumroad license
+check (`gumroad/license_check.py`) — keep your license key confidential.
+
+### Lifetime Tier ($199, one-time)
+
+For individual crypto holders:
+- Self-host the full dead man's switch (AES-256 + RSA-4096 vault, check-ins,
+  beneficiary release, CLI + web UI).
+- Unlimited wallets and beneficiaries for your own assets.
+- Modify the source code freely; modifications are owned by you.
+- Lifetime updates (all v1.x releases).
+
+### Managed Cloud ($49/mo) & Enterprise ($499/mo)
+
+Everything in Lifetime (hosted/white-glove per plan), plus priority support,
+custom features (Enterprise), and managed operations. Subscription terms
+(fees, cancellation, refunds) follow the plan purchased at checkout.
+
+### Restrictions (all tiers)
+
+You may NOT:
+- Redistribute, resell, sublicense, publish, or share the source code or your
+  license key, in whole or in part, in original or modified form — including as
+  a boilerplate, starter kit, template, scaffold, course material, or competing
+  product.
+- Offer LAZARUS itself (or a derivative whose primary value is the LAZARUS
+  codebase) for sale or free distribution.
+- Remove or obscure copyright, attribution, or license notices embedded in
+  the source files.
+
+---
+
+## 2. Updates
+
+Licensed tiers include all v1.x releases, delivered through the official
+purchase channel. There is no public repository distribution channel for paid
+tiers.
+
+---
+
+## 3. Usage Scope
+
+A Lifetime license covers one individual. Enterprise covers the organization
+named at purchase. Sharing the source or license key outside the licensed
+scope is prohibited.
+
+---
+
+## 4. Ownership
+
+LAZARUS is and remains the exclusive property of Ravi Kumar. This license grants
+usage rights only — no ownership, title, or intellectual property rights are
+transferred except to your own modifications as described above. LAZARUS is
+self-hosted software, not a custodian — you remain solely responsible for your
+assets, keys, and beneficiary designations.
+
+---
+
+## 5. No Warranty
+
+LAZARUS IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL THE COPYRIGHT
+HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY ARISING FROM,
+OUT OF, OR IN CONNECTION WITH LAZARUS OR ITS USE, INCLUDING ANY LOSS OF
+DIGITAL ASSETS.
+
+---
+
+## 6. Termination
+
+This license terminates automatically upon breach of any term (including
+payment failure on subscription tiers). Upon termination, you must cease all
+use and destroy all copies of LAZARUS in your possession except copies
+required to recover your own assets. Sections 4, 5, and 7 survive termination.
+
+---
+
+## 7. Governing Terms
+
+This is the complete agreement between you and the copyright holder
+regarding LAZARUS and supersedes any prior proposals or agreements. Any dispute
+shall be subject to the jurisdiction of the copyright holder's place of
+business.
+
+---
+
+## Contact
+
+License questions, enterprise inquiries:
+via the official listing or github.com/ravikumarve
