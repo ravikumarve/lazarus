@@ -866,7 +866,7 @@ Star the repo, share it, or grab the Pro tier: [Buy on Gumroad](https://ravikuma
 
 ## 📜 License
 
-MIT License - see [LICENSE](LICENSE) file for details. You have full rights to use, modify, and distribute this software.
+Commercial License - see [LICENSE](LICENSE) file for details. You have full rights to use and modify this software for your own assets and products; redistribution of the source as a boilerplate is prohibited.
 
 ## 🆘 Support
 
